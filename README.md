@@ -281,7 +281,20 @@ how much is used (yellow above 80 %, red above 95 %). When it is full, uploads a
 still accepted**. Admins change the quota per person under Setup > Users > Manage > *Storage (MB)* (empty = the default,
 `0` = unlimited).
 
-## 8. Everyday commands
+## 8. Inbox tabs and flood protection
+
+The inbox is sorted into tabs: **Primary, Favorites, Security, Promotions, Social, Updates, Forums, Work,
+School** and any you add. New mail is sorted when it arrives; older mail the first time you open the mailbox.
+
+- **Move** (on an open email, or on selected emails) puts mail in another tab. Pick "always put email from
+  this sender" (or the whole @domain) and future mail goes there too. Favorites works the same way.
+- **Security** collects password changes, new sign-ins, codes and SIM / phone-number changes, so a flood
+  of junk can't bury them. Forged senders never land there.
+- When a mailbox gets `MAIL_FLOOD_THRESHOLD` (default 30) emails in an hour, the inbox shows a **Mail flood**
+  warning. Check the Security tab and your phone carrier / bank accounts right away.
+- The gear at the end of the tab row turns tabs off, hides tabs, and edits tabs and sorting rules.
+
+## 9. Everyday commands
 
 ```bash
 docker compose ps                     # what is running
@@ -324,7 +337,7 @@ docker compose down          # stops it, KEEPS your mail
 docker compose down -v       # stops it AND DELETES all mail (the volume). Cannot be undone.
 ```
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Problem | What to check |
 |---|---|
@@ -355,7 +368,7 @@ docker compose down -v       # stops it AND DELETES all mail (the volume). Canno
 | Mail app: "authentication failed" on port 587 | Use your email address with an app password (or an SMTP key's `bm-...` username and password). Revoked ones stop working at once. |
 | Mail app: sending refused with "can only send from..." | A key only sends from its own mailbox and that mailbox's aliases. Check the identity/From address in the app. |
 
-## 10. Security page and email privacy
+## 11. Security page and email privacy
 
 Open **Setup > Security** (the **Settings** gear in the top bar, or the ⋮ menu on a phone, then Security).
 
@@ -389,7 +402,7 @@ Open **Setup > Security** (the **Settings** gear in the top bar, or the ⋮ menu
 
 The web app adapts to the screen: on a phone the tabs move to the bottom, there is a round Compose button (also on tablets; on a computer Compose is the large button at the top left), a message opens full screen (the phone's Back gesture returns to the list), Compose fills the screen, and the Setup tables turn into cards. A tablet shows the list and the message side by side. The app reopens the mailbox you used last.
 
-## 11. Personal accounts (multi-user)
+## 12. Personal accounts (multi-user)
 
 By default BearerMail has **one shared password** (`ACCESS_PASSWORD`) that opens everything. Turn on **personal accounts**
 under **Setup > Users** to run it like Gmail for a family or small team:
@@ -425,7 +438,7 @@ address and password. **Add a user** creates their mailbox; give them the addres
 one under Security > Sign-in). Set it back to `0` afterwards. You can also switch back to one shared password under
 Setup > Users at any time.
 
-## 12. Good to know
+## 13. Good to know
 
 - **Appearance** (Setup, Appearance): pick a theme (Mint, Blossom Pink, Blossom Pink Dark, Red, Red Dark; saved in your browser; the login page has its own colour dots). Upload up to four logos, one each for the signed-in header and the login page, for light and dark themes. Empty slots fall back to the closest logo you did upload, and with none the text name is shown. Logos are shared by everyone and kept in the `viewer_data` volume.
 - **New mail alerts** (Setup, Appearance): a browser notification plus a short sound when new mail arrives in the mailbox you have open. It works while BearerMail is open in a browser tab, needs HTTPS and the browser's permission, and is set per browser. Sound only plays after you have clicked something on the page once (a browser rule). Alerts are not sent while the browser is closed.
@@ -462,7 +475,7 @@ In the web app you can add an existing Gmail/Outlook/Yahoo etc. account to read 
 - Sessions last `SESSION_HOURS` (default 168). They are recorded on the server (`viewer_data` volume), so logout, "Sign out all others" and ending a session on the Security page take effect immediately. Logout is POST only.
 - Changing two-factor settings asks for the password again. The two-factor secret is stored encrypted with a key derived from `SECRET_KEY`; changing `SECRET_KEY` turns two-factor off in practice (see Troubleshooting).
 
-## 13. Development and tests
+## 14. Development and tests
 
 ```bash
 cd mail-service && pip install -r requirements.txt pytest mongomock httpx pytest-asyncio && python -m pytest tests
@@ -471,7 +484,7 @@ cd imap-server && npm ci && npm test
 cd mail-viewer/imap-mail-app && npm ci && npm test
 ```
 
-## 14. Change a mailbox password from the terminal
+## 15. Change a mailbox password from the terminal
 
 The same as Setup > Mailboxes > Reset password in the web app. List your mailboxes:
 

@@ -1,5 +1,24 @@
 # BearerMail changes
 
+## Inbox tabs and mail-flood protection
+
+- The inbox is split into tabs like Gmail: **Primary, Favorites, Security, Promotions, Social, Updates,
+  Forums, Work, School**, plus tabs of your own (Taxes, Kids, ...). Each tab shows its unread count; empty
+  tabs stay out of the way, and **All** shows everything in one list.
+- Mail is sorted automatically when it arrives (from its headers, sender and subject). Mail you already
+  had is sorted the first time you open the mailbox.
+- **Security** tab: password changes, new sign-ins, "was this you?", verification codes, SIM / eSIM /
+  port-out and phone-number or email changes. Senders that fail the forgery checks (SPF/DKIM/DMARC) never
+  land here, and "confirm your subscription" mail never does either.
+- **Mail flood warning**: when a mailbox gets 30+ emails in an hour (set `MAIL_FLOOD_THRESHOLD`), the inbox
+  shows a warning with a link to the Security tab, and admins get a `mail_flood` event under Security.
+  Flooding is how attackers hide "your SIM was changed / new phone ordered" emails.
+- **Move** button on each email (and in the batch bar): put it in any tab, or make a new tab, and choose
+  "always put email from this sender" or "from anyone at @domain" there (also moves their older mail).
+- Gear at the end of the tab row: turn tabs off, hide tabs (their mail goes to Primary), rename or remove
+  your own tabs, and remove sorting rules.
+- Tabs are per mailbox: sorting mail in your inbox never changes anyone else's. IMAP apps still see one INBOX.
+
 ## Verification code banner
 
 - Emails with a one-time / 2FA / verification code (4-8 digits, or a letter+digit code like `K7Q2PX`)

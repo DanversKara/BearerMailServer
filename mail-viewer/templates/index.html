@@ -842,6 +842,8 @@
                     </div>
                     <div class="card-body mail-list-body">
                         <div class="mail-list-toolbar">
+                            <div id="inbox-tabs" class="inbox-tabs d-none" role="tablist" aria-label="Inbox tabs"></div>
+                            <div id="flood-banner"></div>
                             <div class="input-group input-group-sm" id="search-bar" style="display:none;">
                                 <input type="text" class="form-control" id="search-input" data-i18n-ph="searchPlaceholder" placeholder="Search mail..." data-i18n-title="searchHint" title="Search sender / subject / content" onkeydown="if(event.key==='Enter') searchMail()">
                                 <button class="btn btn-outline-secondary" onclick="searchMail()" id="btn-search">
@@ -1019,6 +1021,7 @@
     <script src="{{ url_for('static', filename='keys-ui.js') }}"></script>
     <script src="{{ url_for('static', filename='drive-ui.js') }}"></script>
     <script src="{{ url_for('static', filename='calendar-ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='tabs-ui.js') }}"></script>
     <script src="{{ url_for('static', filename='setup.js') }}"></script>
     <script src="{{ url_for('static', filename='notify.js') }}"></script>
     <script>BearerNotify.init({ getEmail: () => currentEmail });</script>
@@ -1699,6 +1702,7 @@
             isSearchMode = false;
             showMailListView();
             _syncListHeader(tab);
+            BearerTabs.render();
             document.getElementById('btn-left-drawer').classList.toggle('d-none', !['inbox', 'sent', 'trash'].includes(tab));
 
             if (tab === 'inbox') {
@@ -1967,11 +1971,12 @@
                 }
             }
             
+            BearerTabs.onMailbox(email);
             try {
                 const resp = await fetch('/api/inbox/query', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, offset: reqOffset, limit: PAGE_SIZE })
+                    body: JSON.stringify({ email, offset: reqOffset, limit: PAGE_SIZE, tab: BearerTabs.current() })
                 });
                 const data = await resp.json();
                 
@@ -2021,6 +2026,7 @@
                 }
                 
                 renderMessages(currentMessages);
+                if (!append) BearerTabs.refresh();
                 
                 if (silent || append) {
                     if (activeId) {
@@ -2062,7 +2068,7 @@
                 mailList.innerHTML = `
                     <div class="empty-state">
                         <i class="bi bi-inbox d-block"></i>
-                        <p>${t('inboxEmpty')}</p>
+                        <p>${_escapeHtml((!isSearchMode && BearerTabs.emptyText()) || t('inboxEmpty'))}</p>
                         <button class="btn-refresh" onclick="queryInbox()">
                             <i class="bi bi-arrow-clockwise"></i>${t('refresh')}
                         </button>
@@ -2119,6 +2125,7 @@
                 const data = await resp.json();
                 if (data.success) {
                     isSearchMode = true;
+                    BearerTabs.render();
                     renderMessages(data.messages);
                     if (data.messages.length === 0) {
                         mailList.innerHTML = `
@@ -2141,6 +2148,7 @@
         function clearSearch() {
             document.getElementById('search-input').value = '';
             isSearchMode = false;
+            BearerTabs.render();
             renderMessages(currentMessages);
         }
 
@@ -2177,6 +2185,7 @@
                 ${btn('btn-outline-primary', 'openReplyAll()', 'bi-reply-all', t('replyAll'))}
                 ${btn('btn-outline-secondary', 'openForward()', 'bi-forward', t('forward'))}
                 ${btn('btn-outline-danger', `deleteEmail('${messageId}')`, 'bi-trash', t('delete'))}
+                ${_NO_TRACE ? '' : btn('btn-outline-secondary', `BearerTabs.moveDialog(['${messageId}'])`, 'bi-folder-symlink', 'Move')}
                 <div class="dropdown d-inline-block">
                     <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" aria-expanded="false" title="More" aria-label="More actions"><i class="bi bi-three-dots"></i></button>
                     <ul class="dropdown-menu dropdown-menu-end">
@@ -3015,7 +3024,7 @@
         // The toolbar above the list: the same "select, then act" bar in Inbox, Sent and Trash.
         const BATCH_ACTIONS = {
             inbox: [['delete', 'btn-outline-danger', 'bi-trash', 'Delete'], ['mark_read', 'btn-outline-secondary', 'bi-envelope-open', 'Read'],
-                    ['mark_unread', 'btn-outline-secondary', 'bi-envelope', 'Unread']],
+                    ['mark_unread', 'btn-outline-secondary', 'bi-envelope', 'Unread'], ['move_tab', 'btn-outline-secondary', 'bi-folder-symlink', 'Move']],
             sent: [['sent_delete', 'btn-outline-danger', 'bi-trash', 'Delete']],
             trash: [['restore', 'btn-outline-primary', 'bi-arrow-counterclockwise', 'Restore'], ['permanent_delete', 'btn-outline-danger', 'bi-x-circle', 'Delete forever']],
         };
@@ -3071,6 +3080,7 @@
             const ids = idsArg || getSelectedIds();
             if (ids.length === 0) return;
             if (action === 'sent_delete') return deleteSentMessages(ids);
+            if (action === 'move_tab') return BearerTabs.moveDialog(ids);
             if (action === 'permanent_delete' && !idsArg) {
                 return showConfirm({ title: t('permanentDelete'), message: `Delete ${ids.length} message(s) forever? This cannot be undone.`,
                     okLabel: t('permanentDeleteOk'), onConfirm: () => batchAction('permanent_delete', ids) });

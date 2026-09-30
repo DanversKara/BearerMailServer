@@ -63,6 +63,7 @@ EVENT_KINDS = {
     "smtp": {
         "connect": ("info", "Connected to port 25"),
         "message_received": ("info", "Delivered a message"),
+        "mail_flood": ("warn", "A mailbox is getting a flood of email (floods are used to hide account alerts)"),
         "relay_attempt": ("warn", "Tried to send mail to a domain that is not yours (relay attempt)"),
         "auth_attempt": ("warn", "Tried to log in on port 25 (BearerMail has no SMTP login, so this is a password-guessing bot)"),
         "blocked": ("warn", "Refused: address is on your block list"),

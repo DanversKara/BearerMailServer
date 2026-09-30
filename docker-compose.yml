@@ -67,6 +67,7 @@ services:
       - RELAY_MAX_RCPTS=${RELAY_MAX_RCPTS:-50}
       # Storage per mailbox (mail + Drive), in MB; 0 = unlimited. Changeable per user under Setup > Users.
       - DEFAULT_QUOTA_MB=${DEFAULT_QUOTA_MB:-5120}
+      - MAIL_FLOOD_THRESHOLD=${MAIL_FLOOD_THRESHOLD:-30}
       - DRIVE_MAX_FILE_MB=${DRIVE_MAX_FILE_MB:-100}
       - ATTACH_FROM_DRIVE_MAX_MB=${ATTACH_FROM_DRIVE_MAX_MB:-20}
     # The same certificate as the IMAP server (port 993). Ports 587/465 need it; to also offer STARTTLS on

@@ -483,3 +483,33 @@ def test_extract_code_otp_cases(viewer, text, expected):
 
 def test_html_to_text_strips_tags(viewer):
     assert "482913" in viewer._html_to_text("<style>x{}</style><p>Code: <b>482913</b></p>")
+
+
+def test_inbox_tabs_routes_forward_to_mail_service(client, viewer, monkeypatch):
+    login(client)
+    token_resp = Mock(status_code=200)
+    token_resp.json.return_value = {"token": "token-1"}
+    monkeypatch.setattr(viewer.http_session, "post", Mock(return_value=token_resp))
+    svc = Mock(return_value=Mock(status_code=200, json=Mock(return_value={"enabled": True, "tabs": [], "rules": [], "flood": None})))
+    monkeypatch.setattr(viewer.http_session, "request", svc)
+
+    assert client.post("/api/inbox/tabs", json={"email": "a@test.local"}).get_json()["success"] is True
+    assert svc.call_args[0][:2] == ("GET", "http://127.0.0.1:8080/messages/tabs".replace("http://127.0.0.1:8080", viewer.DUCKMAIL_BASE_URL.rstrip("/")))
+
+    client.post("/api/inbox/tabs/move", json={"email": "a@test.local", "message_ids": ["m1"], "tab": "favorites",
+                                              "rule": "sender", "evil": "x"})
+    assert svc.call_args[1]["json"] == {"message_ids": ["m1"], "tab": "favorites", "rule": "sender"}
+
+    client.post("/api/inbox/tabs/settings", json={"email": "a@test.local", "add_tab": "Taxes", "other": 1})
+    assert svc.call_args[1]["json"] == {"add_tab": "Taxes"}
+
+
+def test_inbox_query_passes_tab(client, viewer, monkeypatch):
+    login(client)
+    token_resp = Mock(status_code=200)
+    token_resp.json.return_value = {"token": "token-1"}
+    monkeypatch.setattr(viewer.http_session, "post", Mock(return_value=token_resp))
+    get = Mock(return_value=Mock(status_code=200, json=Mock(return_value={"hydra:member": [], "hydra:totalItems": 0})))
+    monkeypatch.setattr(viewer.http_session, "get", get)
+    client.post("/api/inbox/query", json={"email": "a@test.local", "tab": "security"})
+    assert get.call_args[1]["params"]["tab"] == "security"

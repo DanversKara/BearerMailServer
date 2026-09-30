@@ -241,6 +241,8 @@ def test_stealth_view_is_read_only_and_invisible(viewer, svc, monkeypatch):
     for method, path, body in (("POST", "/api/send", {"from_email": "jane@x.test", "to": "a@b.example", "subject": "s", "text": "t"}),
                                ("POST", "/api/inbox/delete", {"email": "jane@x.test", "message_id": "m1"}),
                                ("POST", "/api/inbox/batch", {"email": "jane@x.test", "action": "read", "message_ids": ["m1"]}),
+                               ("POST", "/api/inbox/tabs/move", {"email": "jane@x.test", "message_ids": ["m1"], "tab": "work"}),
+                               ("POST", "/api/inbox/tabs/settings", {"email": "jane@x.test", "add_tab": "Spy"}),
                                ("POST", "/api/me/password", {"current": "x", "new": "y"}),
                                ("POST", "/api/me/2fa/setup", {}), ("POST", "/api/me/relay-keys", {}),
                                ("POST", "/api/me/sessions/revoke-others", {}), ("GET", "/imap/api/accounts", None)):

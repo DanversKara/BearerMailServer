@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-co
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py bearer_ext.py calendar_ext.py dmarc_ext.py drive_ext.py mail_auth.py relay_ext.py security_ext.py users_ext.py ./
+COPY app.py bearer_ext.py calendar_ext.py dmarc_ext.py drive_ext.py mail_auth.py relay_ext.py security_ext.py tabs_ext.py users_ext.py ./
 
 # SMTP=25, API=8080
 EXPOSE 25 465 587 8080

@@ -36,6 +36,7 @@ import drive_ext
 import mail_auth
 import relay_ext
 import security_ext
+import tabs_ext
 import users_ext
 
 # ---------------------------------------------------------------------------
@@ -594,6 +595,8 @@ relay_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, hostnam
 drive_ext.configure(get_db=lambda: db, require_api_key=_require_api_key)
 dmarc_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, server_ip=SERVER_IP)
 calendar_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, hostname=SMTP_HOSTNAME)
+tabs_ext.configure(get_db=lambda: db, get_account=get_current_account, addr_match=_addr_match,
+                   record_event=security_ext.record)
 
 
 @app.get("/admin/domains")
@@ -665,6 +668,7 @@ app.include_router(relay_ext.router)
 app.include_router(drive_ext.router)
 app.include_router(dmarc_ext.router)
 app.include_router(calendar_ext.router)
+app.include_router(tabs_ext.router)
 
 
 # ---- Messages ----
@@ -740,13 +744,17 @@ async def list_messages(
     account=Depends(get_current_account),
     offset: int = 0,
     limit: int = 30,
+    tab: str = "",
 ):
-    """List the inbox (Bearer token auth), paginated"""
+    """List the inbox (Bearer token auth), paginated; ``tab`` narrows it to one inbox tab."""
     address = account["address"]
     limit = max(1, min(limit, 100))  # 1..100
     offset = max(offset, 0)
 
     query_filter = {"to_addresses": _addr_match(account), "is_deleted": {"$ne": True}}
+    if tab:
+        tabs_ext.backfill(account)  # mail from before tabs existed gets sorted before it is filtered
+        query_filter.update(tabs_ext.tab_filter(address, tab))
     total = db.messages.count_documents(query_filter)
 
     cursor = (
@@ -755,7 +763,7 @@ async def list_messages(
         .skip(offset)
         .limit(limit)
     )
-    messages = [_format_message(msg) for msg in cursor]
+    messages = [{**_format_message(msg), "tab": tabs_ext.effective_tab(msg, address)} for msg in cursor]
     return {
         "hydra:member": messages,
         "hydra:totalItems": total,
@@ -854,7 +862,7 @@ async def get_message(message_id: str, peek: int = 0, account=Depends(get_curren
         except Exception as exc:
             logger.warning(f"Attachment scan failed for {message_id}: {exc}")
 
-    return _format_message(msg, include_body=True)
+    return {**_format_message(msg, include_body=True), "tab": tabs_ext.effective_tab(msg, address)}
 
 
 @app.get("/messages/{message_id}/attachments/{attachment_id}")
@@ -1371,6 +1379,14 @@ class MailHandler:
                 doc["auth"] = auth
             if scan:
                 doc["scan"] = scan
+            # Inbox tabs: the automatic sort, plus any "always put this sender in..." rules of the recipients
+            try:
+                doc["category"] = tabs_ext.classify(msg, from_email, subject, text_body, html_body,
+                                                    mail_auth.auth_verdict(auth))
+                doc["cat_v"] = tabs_ext.CAT_VERSION
+                doc["tab_overrides"] = tabs_ext.overrides_for(to_addresses, from_email)
+            except Exception as exc:
+                logger.warning(f"Tab sorting skipped: {exc}")
 
             db.messages.insert_one(doc)
             logger.info(

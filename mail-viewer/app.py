@@ -1183,7 +1183,7 @@ def _only_your_own_mailboxes():
 
 # A stealth view is read-only: the admin can look, but nothing changes that the person could notice
 # (no sending, no deleting, nothing marked read, no password / two-factor / key changes).
-_STEALTH_READ_POSTS = {"/api/inbox/query", "/api/inbox/detail", "/api/inbox/search", "/api/trash/query",
+_STEALTH_READ_POSTS = {"/api/inbox/query", "/api/inbox/detail", "/api/inbox/search", "/api/inbox/tabs", "/api/trash/query",
                        "/api/sent/query", "/api/sent/detail", "/api/stealth/end"}
 
 
@@ -1326,6 +1326,7 @@ def inbox_query():
     password = data.get("password", "").strip()
     offset = int(data.get("offset", 0))
     limit = int(data.get("limit", 30))
+    tab = str(data.get("tab") or "")[:40]
 
     if not email:
         return jsonify({"success": False, "message": "Enter an email address", "messages": []})
@@ -1376,7 +1377,7 @@ def inbox_query():
         # Fetch the message list (paginated)
         mail_resp = http_session.get(
             f"{base_url}/messages",
-            params={"offset": offset, "limit": limit},
+            params={"offset": offset, "limit": limit, **({"tab": tab} if tab else {})},
             headers={"Authorization": f"Bearer {token}"},
             timeout=30
         )
@@ -1680,6 +1681,56 @@ def inbox_batch():
     except Exception as e:
         app.logger.error(f"Batch action failed: {e}", exc_info=True)
         return jsonify({"success": False, "message": "Internal error, please try again"})
+
+
+# ---- Inbox tabs (Primary / Favorites / Security / Promotions / ...) ----
+
+def _tabs_call(path: str, method: str = "GET", body: dict | None = None):
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip()
+    if not email:
+        return jsonify({"success": False, "message": "Missing mailbox"})
+    token, err = _get_mail_token(email, str(data.get("password", "")).strip())
+    if err or not token:
+        return jsonify({"success": False, "message": (err or ["Sign-in failed"])[0]})
+    try:
+        resp = http_session.request(method, f"{DUCKMAIL_BASE_URL.rstrip('/')}{path}", json=body,
+                                    headers={"Authorization": f"Bearer {token}"}, timeout=30)
+        payload = resp.json()
+    except Exception as e:
+        app.logger.error(f"Tabs request failed: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "Internal error, please try again"})
+    if resp.status_code != 200:
+        detail = payload.get("detail") if isinstance(payload, dict) else None
+        return jsonify({"success": False, "message": detail if isinstance(detail, str) else "Operation failed"})
+    return jsonify({"success": True, **payload})
+
+
+@app.route("/api/inbox/tabs", methods=["POST"])
+@login_required
+def inbox_tabs():
+    """Tab list with totals / unread counts, rules and the flood warning."""
+    return _tabs_call("/messages/tabs")
+
+
+@app.route("/api/inbox/tabs/move", methods=["POST"])
+@login_required
+def inbox_tabs_move():
+    if _check_viewer_rate_limit("mail_mutation", SENSITIVE_RATE_LIMIT_WINDOW, SENSITIVE_RATE_LIMIT_MAX):
+        return _rate_limited_json()
+    data = request.get_json(silent=True) or {}
+    body = {k: data.get(k) for k in ("message_ids", "tab", "rule", "match", "senders") if k in data}
+    return _tabs_call("/messages/tabs/move", "POST", body)
+
+
+@app.route("/api/inbox/tabs/settings", methods=["POST"])
+@login_required
+def inbox_tabs_settings():
+    if _check_viewer_rate_limit("mail_mutation", SENSITIVE_RATE_LIMIT_WINDOW, SENSITIVE_RATE_LIMIT_MAX):
+        return _rate_limited_json()
+    data = request.get_json(silent=True) or {}
+    keys = ("enabled", "hidden", "add_tab", "rename_tab", "remove_tab", "remove_rule")
+    return _tabs_call("/messages/tabs/settings", "POST", {k: data[k] for k in keys if k in data})
 
 
 # ---- Search messages API ----
