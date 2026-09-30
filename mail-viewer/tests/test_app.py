@@ -463,3 +463,23 @@ def test_imap_proxy_adds_bridge_token_and_blocks_host_switch(client, viewer, mon
     assert calls[-1]["headers"]["X-Bridge-Token"] == "bridge-secret"
     assert calls[-1]["url"].startswith("http://imap-mail.test/")
     assert client.get("/imap/http://evil.test/x").status_code == 404
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Use 7391 as your one-time passcode", "7391"),
+    ("Your 2FA code 20931845 expires at 10:45", "20931845"),
+    ("Security code: K7Q2PX", "K7Q2PX"),
+    ("Your login code is 123 456.", "123456"),
+    ("Your OTP is 5829. Do not share. Copyright 2026", "5829"),
+    ("Sign in code 845201. Acme Inc, San Francisco, CA 94107", "845201"),
+    ("Order #123456 shipped. Total $1234. Call 555-123-4567", None),
+    ("Newsletter 2025 edition with 1234 readers", None),
+    ("Thanks for your order 98765432", None),
+    ("Meeting moved to 2026-10-01 at 14:30", None),
+])
+def test_extract_code_otp_cases(viewer, text, expected):
+    assert viewer._extract_code(text) == expected
+
+
+def test_html_to_text_strips_tags(viewer):
+    assert "482913" in viewer._html_to_text("<style>x{}</style><p>Code: <b>482913</b></p>")

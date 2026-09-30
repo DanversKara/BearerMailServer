@@ -1,5 +1,13 @@
 # BearerMail changes
 
+## Verification code banner
+
+- Emails with a one-time / 2FA / verification code (4-8 digits, or a letter+digit code like `K7Q2PX`)
+  now show a large **Verification code** box above the message with a **Copy code** button.
+- Detection only triggers when the email reads like a code email ("verification code", "OTP", "2FA",
+  "passcode", "PIN", "sign-in code", ...) and skips years, prices, phone numbers, times, zip codes
+  and order/invoice numbers. The plain text part is searched first, then the HTML.
+
 ## Drive, Calendar, app passwords, storage and fixes
 
 ### Upgrade

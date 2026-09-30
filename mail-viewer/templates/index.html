@@ -1105,7 +1105,7 @@
                 time: 'Time',
                 autoRefreshTitle: 'Auto-refresh every 15s',
                 disableDomain: 'Disable this domain',
-                verifyCode: 'Code',
+                verifyCode: 'Verification code',
                 settings: 'Settings',
                 openMailboxPanel: 'Mailbox panel',
                 backToList: 'Back',
@@ -1114,7 +1114,7 @@
                 recentStale: 'Domain disabled',
                 copied: 'Copied {v}',
                 copyFailed: 'Copy failed, select it manually',
-                copyCode: 'Click to copy code',
+                copyCode: 'Copy code',
                 undo: 'Undo',
                 mailDeleted: 'Email deleted',
                 mailsDeleted: '{n} emails deleted',
@@ -2336,9 +2336,6 @@
                 _updateUnreadBadge();
                 const fromName = _escapeHtml(msg.from?.name || '');
                 const fromAddr = _escapeHtml(msg.from?.address || '');
-                const codeHtml = msg.extracted_code
-                    ? `<button type="button" class="badge bg-success code-badge" title="${t('copyCode')}" onclick="copyText('${msg.extracted_code}', event)"><i class="bi bi-clipboard me-1"></i>${msg.extracted_code}</button>`
-                    : '';
                 await BearerPrivacy.loadSettings();
                 const showImages = BearerPrivacy.shouldShowImages(msg, false);
                 const attachmentUrl = (att, index) => `/api/inbox/attachment/${encodeURIComponent(messageId)}/${_attachmentId(att, index)}?email=${encodeURIComponent(currentEmail)}&filename=${encodeURIComponent(att.filename || `attachment_${index}`)}`;
@@ -2363,7 +2360,16 @@
                         ${_detailMetaRow(t('time'), new Date(msg.createdAt).toLocaleString())}
                         ${msg.auth && !msg.auth.skipped ? _detailMetaRow('Sender check', BearerPrivacy.authChips(msg.auth)) : ''}
                     </details>
-                    ${codeHtml ? _detailMetaRow(t('verifyCode'), codeHtml) : ''}
+                    ${msg.extracted_code ? `
+                    <div class="otp-banner" role="group" aria-label="${t('verifyCode')}">
+                        <div class="otp-banner-text">
+                            <div class="otp-banner-label"><i class="bi bi-shield-lock me-1"></i>${t('verifyCode')}</div>
+                            <div class="otp-banner-code">${_escapeHtml(msg.extracted_code)}</div>
+                        </div>
+                        <button type="button" class="btn btn-success otp-copy-btn" onclick="copyOtpCode(this, '${_escapeHtml(msg.extracted_code)}', event)">
+                            <i class="bi bi-clipboard me-1"></i>${t('copyCode')}
+                        </button>
+                    </div>` : ''}
                     ${BearerPrivacy.banners(msg, false)}
                     <div id="privacy-bar-slot">${BearerPrivacy.privacyBar(msg, false, showImages)}</div>
                     ${BearerPrivacy.attachmentsHtml(msg.attachments, attachmentUrl, _formatSize)}
@@ -2384,6 +2390,14 @@
             }
         }
 
+
+        function copyOtpCode(btn, code, event) {
+            copyText(code, event);
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+            btn.classList.add('copied');
+            setTimeout(() => { btn.innerHTML = original; btn.classList.remove('copied'); }, 1800);
+        }
 
         let composeModal = null;
         let quillEditor = null;

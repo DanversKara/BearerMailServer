@@ -304,3 +304,18 @@ html.bm-stealth .bm-fab, html.bm-stealth .bm-compose-big, html.bm-stealth .bm-ne
   .cal-ev { font-size: 0; height: 6px; padding: 0; }
   .drive-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 }
+
+/* One-time / 2FA code banner above the message */
+.otp-banner { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  margin:12px 0; padding:12px 16px; border-radius:12px; background:#ecfdf3; border:1px solid #a6e9c1; }
+.otp-banner-label { font-size:.8rem; color:#166534; font-weight:600; }
+.otp-banner-code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:1.7rem;
+  font-weight:700; letter-spacing:.18em; color:#0f172a; user-select:all; cursor:text; }
+.otp-copy-btn { border-radius:10px; font-weight:600; min-width:130px; }
+.otp-copy-btn.copied { background:#15803d; border-color:#15803d; }
+@media (prefers-color-scheme: dark) {
+  .otp-banner { background:#0f2a1c; border-color:#1f6b40; }
+  .otp-banner-label { color:#86efac; }
+  .otp-banner-code { color:#f1f5f9; }
+}
+@media (max-width: 576px) { .otp-copy-btn { width:100%; } }

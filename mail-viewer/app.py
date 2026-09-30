@@ -9,6 +9,7 @@ import socket
 import time
 from collections import defaultdict
 from functools import wraps
+from html import unescape
 
 import requests
 import bleach
@@ -679,14 +680,78 @@ def _extract_api_error(resp, fallback: str = "Operation failed") -> str:
     return fallback
 
 
-_CODE_PATTERN = re.compile(r"\b(\d{6})\b")
+# Words that say "this email carries a one-time code". Without one of them nearby we don't
+# guess, so order numbers, prices and zip codes in ordinary mail are left alone.
+_CODE_KEYWORDS = re.compile(
+    r"(verification|verify|confirmation|confirm|security|login|log-in|log in|sign-in|sign in|signin|"
+    r"access|authentication|auth|one[- ]time|single[- ]use|otp|2fa|two[- ]factor|mfa|multi[- ]factor|"
+    r"passcode|pass code|pin|code|token|c[oó]digo|kod|code de)\b",
+    re.I,
+)
+# Digit codes of 4-8 (optionally split as "123 456" / "123-456"), or 4-8 letter+digit codes like "K7Q2PX".
+_CODE_CANDIDATE = re.compile(
+    r"(?<![\w$€£¥#+/.:-])"
+    r"(\d{3,4}[ -]\d{3,4}|\d{4,8}|(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{4,8})"
+    r"(?![\w%/:]|[.,]\d)"
+)
+_NOT_A_CODE_BEFORE = re.compile(
+    r"\b(order|invoice|ticket|case|account|acct|ref|reference|tracking|phone|tel|call|fax|zip|"
+    r"suite|ste|apt|unit|box|no\.?|number|id)\W{0,3}$",
+    re.I,
+)
+
+
+def _html_to_text(html: str) -> str:
+    html = re.sub(r"(?is)<(script|style|head)\b.*?</\1>", " ", html or "")
+    html = re.sub(r"(?s)<[^>]+>", " ", html)
+    return unescape(html)
 
 
 def _extract_code(*parts: str) -> str | None:
-    """Extract a 6-digit verification code from text snippets; first match wins."""
-    text = " ".join(p for p in parts if p)
-    match = _CODE_PATTERN.search(text)
-    return match.group(1) if match else None
+    """Find a one-time / 2FA / verification code (4-8 characters) in the given text.
+
+    Only returns something when the text reads like a code email (a keyword such as
+    "verification code", "OTP", "2FA", "passcode" or "PIN") and the code sits close to it.
+    Years, prices, phone numbers, times, dates and order numbers are skipped.
+    """
+    text = re.sub(r"\s+", " ", " ".join(p for p in parts if p))[:20000]
+    keywords = [m.start() for m in _CODE_KEYWORDS.finditer(text)]
+    if not keywords:
+        return None
+    best, best_score = None, None
+    for m in _CODE_CANDIDATE.finditer(text):
+        raw = m.group(1)
+        code = re.sub(r"[ -]", "", raw)
+        if not 4 <= len(code) <= 8:
+            continue
+        if code.isdigit():
+            if len(code) == 4 and 1900 <= int(code) <= 2099:
+                continue  # a year
+            if len(set(code)) == 1 and len(code) < 6:
+                continue  # 0000 / 1111 placeholders
+        elif code.isalpha() or code.lower() in {"utf8", "mp3", "mp4", "h264"}:
+            continue
+        else:
+            # Letter+digit codes must be written as one uppercase token (not "COVID19"-ish words).
+            if sum(c.isdigit() for c in code) < 2:
+                continue
+        before = text[max(0, m.start() - 20):m.start()]
+        if _NOT_A_CODE_BEFORE.search(before) and not re.search(r"(code|pin|otp|passcode)\W{0,3}$", before, re.I):
+            continue
+        if re.search(r"\b[A-Z]{2},? $", before) and len(code) == 5 and code.isdigit():
+            continue  # US state + zip code in a footer
+        if re.search(r"\d[ -]$", before):
+            continue  # part of a phone number / longer digit run
+        # Distance to the nearest keyword; a code after its keyword ("Your code is 123456") wins ties.
+        dist = min(
+            (m.start() - k) if k <= m.start() else (k - m.end()) * 1.5 for k in keywords
+        )
+        if dist > 160:
+            continue
+        score = dist - (20 if code.isdigit() else 0) - (10 if len(code) == 6 else 0)
+        if best_score is None or score < best_score:
+            best, best_score = code, score
+    return best
 
 
 def _format_attachments(detail: dict) -> list:
@@ -1464,11 +1529,14 @@ def inbox_detail():
 
         detail = detail_resp.json()
         if isinstance(detail, dict):
+            # Search the raw body before sanitising: plain part first, then the HTML's visible text
+            raw_html = detail.get("html", "")
             detail["html"], detail["privacy"] = _prepare_html_with_report(detail.get("html", ""))
             detail["attachments"] = _format_attachments(detail)
             # The detail has the full body, so the code search covers more than the list's subject + intro
-            detail["extracted_code"] = _extract_code(
-                detail.get("subject", ""), detail.get("intro", ""), detail.get("text", "")
+            subject, intro = detail.get("subject", ""), detail.get("intro", "")
+            detail["extracted_code"] = _extract_code(subject, intro, detail.get("text", "")) or (
+                _extract_code(subject, _html_to_text(raw_html)) if raw_html else None
             )
         return jsonify({"success": True, "detail": detail})
 
@@ -1838,6 +1906,8 @@ def sent_detail():
 
         detail = detail_resp.json()
         if isinstance(detail, dict):
+            # Search the raw body before sanitising: plain part first, then the HTML's visible text
+            raw_html = detail.get("html", "")
             detail["html"], detail["privacy"] = _prepare_html_with_report(detail.get("html", ""))
         return jsonify({"success": True, "detail": detail})
 
