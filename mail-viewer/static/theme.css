@@ -1,0 +1,95 @@
+/* BearerMail themes. The default (Mint) lives in the page's own :root; these override it. */
+
+/* Blossom Pink (light) */
+html[data-theme="blossom"] {
+  --primary-color: #c2497a; --primary-hover: #a63a66; --primary-rgb: 194,73,122;
+  --bg-color: #fff5f8; --card-bg: #ffffff; --text-color: #3a1f2b; --muted-text: #7a5566;
+  --border-color: #f3d3df; --navy: #b04a72; --brand-color: #c2497a; --soft-bg: #fff0f5;
+  --nav-bg: rgba(255,245,248,0.95); --page-gradient: linear-gradient(135deg,#ffffff 0%,#fff7fa 50%,#ffffff 100%);
+  --shadow: 0 2px 8px rgba(194,73,122,0.14);
+}
+/* Blossom Pink (dark) */
+html[data-theme="blossom-dark"] {
+  --primary-color: #c2497a; --primary-hover: #d4608c; --primary-rgb: 212,96,140;
+  --bg-color: #1f1419; --card-bg: #2a1b23; --text-color: #f7e6ee; --muted-text: #c9a5b6;
+  --border-color: #4a2f3c; --navy: #e58fb0; --brand-color: #ff9ec0; --soft-bg: #33222b;
+  --nav-bg: rgba(31,20,25,0.95); --page-gradient: linear-gradient(135deg,#1f1419 0%,#26171f 100%);
+  --shadow: 0 2px 10px rgba(0,0,0,0.4);
+}
+/* Red (light) */
+html[data-theme="red"] {
+  --primary-color: #c62839; --primary-hover: #a81f2e; --primary-rgb: 198,40,57;
+  --bg-color: #fff6f6; --card-bg: #ffffff; --text-color: #2a1416; --muted-text: #6d4a4d;
+  --border-color: #f0d0d2; --navy: #b3202f; --brand-color: #b3202f; --soft-bg: #fdeeee;
+  --nav-bg: rgba(255,246,246,0.95); --page-gradient: linear-gradient(135deg,#ffffff 0%,#fff8f8 50%,#ffffff 100%);
+  --shadow: 0 2px 8px rgba(198,40,57,0.14);
+}
+/* Red (dark) */
+html[data-theme="red-dark"] {
+  --primary-color: #c62839; --primary-hover: #dc3b4d; --primary-rgb: 220,59,77;
+  --bg-color: #1a1112; --card-bg: #261719; --text-color: #f6e7e8; --muted-text: #c9a3a6;
+  --border-color: #4a2b2f; --navy: #ee7480; --brand-color: #ff8a94; --soft-bg: #301d20;
+  --nav-bg: rgba(26,17,18,0.95); --page-gradient: linear-gradient(135deg,#1a1112 0%,#211416 100%);
+  --shadow: 0 2px 10px rgba(0,0,0,0.45);
+}
+
+/* Bootstrap components pick their colours from --bs-*; keep them in step with the theme. */
+html[data-theme] {
+  --bs-body-bg: var(--bg-color); --bs-body-color: var(--text-color);
+  --bs-border-color: var(--border-color); --bs-link-color: var(--primary-color); --bs-link-hover-color: var(--primary-hover);
+}
+html[data-theme="blossom-dark"], html[data-theme="red-dark"] {
+  --bs-body-bg: var(--bg-color); --bs-body-color: var(--text-color); --bs-secondary-color: var(--muted-text);
+  --bs-tertiary-bg: var(--soft-bg); --bs-emphasis-color: var(--text-color);
+  --bs-link-color: var(--brand-color); --bs-link-hover-color: var(--text-color);
+}
+
+/* Dark themes: things the page hard-codes as light */
+html[data-theme$="-dark"] .form-control, html[data-theme$="-dark"] .form-select,
+html[data-theme$="-dark"] .input-group-text, html[data-theme$="-dark"] .chip-input { background-color: var(--soft-bg); color: var(--text-color); border-color: var(--border-color); }
+html[data-theme$="-dark"] .form-control::placeholder { color: var(--muted-text); }
+html[data-theme$="-dark"] .modal-content, html[data-theme$="-dark"] .dropdown-menu, html[data-theme$="-dark"] .offcanvas { background: var(--card-bg); color: var(--text-color); }
+html[data-theme$="-dark"] .empty-state .btn-refresh { background: var(--soft-bg); color: var(--text-color); border-color: var(--border-color); }
+html[data-theme$="-dark"] .empty-state .btn-refresh:hover { background: var(--border-color); color: var(--text-color); }
+html[data-theme$="-dark"] .skeleton { background: linear-gradient(90deg, var(--soft-bg) 25%, var(--border-color) 50%, var(--soft-bg) 75%); background-size: 200% 100%; }
+html[data-theme$="-dark"] .table { --bs-table-bg: transparent; --bs-table-color: var(--text-color); --bs-table-border-color: var(--border-color); }
+html[data-theme$="-dark"] .btn-outline-secondary { color: var(--muted-text); border-color: var(--border-color); }
+html[data-theme$="-dark"] .btn-outline-secondary:hover { background: var(--soft-bg); color: var(--text-color); }
+html[data-theme$="-dark"] .text-muted { color: var(--muted-text) !important; }
+html[data-theme$="-dark"] .badge.text-bg-light { background: var(--soft-bg) !important; color: var(--text-color) !important; }
+html[data-theme$="-dark"] .alert-secondary { background: var(--soft-bg); color: var(--text-color); border-color: var(--border-color); }
+html[data-theme$="-dark"] .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+/* Email bodies are rendered on a light canvas on purpose (senders design for white). */
+html[data-theme$="-dark"] .mail-body-container, html[data-theme$="-dark"] .mail-plaintext { color: #1a2421; }
+
+/* Theme picker */
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .75rem; }
+.theme-card { border: 2px solid var(--border-color); border-radius: 10px; padding: .6rem; background: var(--card-bg); color: var(--text-color); text-align: left; cursor: pointer; }
+.theme-card.active { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(var(--primary-rgb), .25); }
+.theme-swatch { height: 34px; border-radius: 6px; margin-bottom: .4rem; border: 1px solid rgba(128,128,128,.25); }
+.brand-logo { max-height: 48px; max-width: 260px; object-fit: contain; display: block; }
+
+/* Controls that Bootstrap colours blue by default */
+html[data-theme] .form-check-input:checked { background-color: var(--primary-color); border-color: var(--primary-color); }
+html[data-theme] .form-check-input:focus, html[data-theme] .form-control:focus, html[data-theme] .form-select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 .2rem rgba(var(--primary-rgb), .2); }
+html[data-theme] a:not(.btn):not(.nav-link):not(.navbar-brand) { color: var(--bs-link-color); }
+html[data-theme] .btn-outline-primary { color: var(--primary-color); border-color: var(--primary-color); }
+html[data-theme] .btn-outline-primary:hover { background: var(--primary-color); border-color: var(--primary-color); color: #fff; }
+
+/* Any Bootstrap "light" surface follows the theme (dark themes would otherwise get white boxes) */
+html[data-theme] .bg-light, html[data-theme] .bg-white, html[data-theme] .table-light { background-color: var(--soft-bg) !important; color: var(--text-color) !important; }
+html[data-theme] .card { color: var(--text-color); }
+html[data-theme] .bg-primary, html[data-theme] .badge.text-bg-primary { background-color: var(--primary-color) !important; }
+
+/* Logos: one image per theme mode; the page shows the one that matches */
+.brand-logo.logo-for-dark, .login-logo.logo-for-dark { display: none; }
+html[data-bs-theme="dark"] .brand-logo.logo-for-dark, html[data-bs-theme="dark"] .login-logo.logo-for-dark { display: block; }
+html[data-bs-theme="dark"] .brand-logo.logo-for-light, html[data-bs-theme="dark"] .login-logo.logo-for-light { display: none; }
+.login-logo { max-height: 70px; max-width: 100%; object-fit: contain; margin: 0 auto; display: block; }
+.login-title:has(.login-logo) { line-height: 0; }
+
+/* Login page theme swatches */
+.login-theme { position: fixed; top: 16px; right: 16px; display: flex; gap: 8px; }
+.swatch-btn { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(128,128,128,.4); cursor: pointer; padding: 0; }
+.swatch-btn.active { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(var(--primary-rgb), .3); }
+html[data-theme$="-dark"] .login-card .form-label { color: var(--text-color); }

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>BearerMail - Login</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fonts/satisfy.css') }}" rel="stylesheet">
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <style>
+        :root {
+            --primary-color: #5b9a8b;
+            --primary-hover: #4a8a7b;
+            --primary-rgb: 91,154,139;
+            --brand-color: #2a5f8a;
+            --card-bg: #ffffff;
+            --text-color: #1a2421;
+            --page-gradient: linear-gradient(135deg, #ffffff 0%, #f7fbf9 50%, #ffffff 100%);
+            --shadow: 0 4px 20px rgba(91,154,139,0.15);
+        }
+        body {
+            background: var(--page-gradient);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            max-width: 400px;
+            width: calc(100% - 32px);
+            margin: 16px;
+            padding: clamp(24px, 6vw, 40px);
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+        }
+        .login-title {
+            font-family: 'Satisfy', cursive;
+            color: var(--brand-color);
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .btn-primary {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+        }
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(var(--primary-rgb),0.15);
+        }
+        .lang-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+    </style>
+    <link href="{{ url_for('static', filename='theme.css') }}" rel="stylesheet">
+</head>
+<body>
+
+    <div class="login-theme" id="theme-swatches" role="group" aria-label="Theme"></div>
+
+    <div class="login-card">
+        <h1 class="login-title">
+            {% if has_login_logo %}{% if brand_login.light %}<img class="login-logo logo-for-light" src="{{ brand_login.light }}" alt="BearerMail">{% endif %}{% if brand_login.dark %}<img class="login-logo logo-for-dark" src="{{ brand_login.dark }}" alt="BearerMail">{% endif %}{% else %}<i class="bi bi-envelope me-2"></i>BearerMail{% endif %}
+        </h1>
+
+        {% if error %}
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+        </div>
+        {% endif %}
+
+        {% if step == 'code' %}
+        <form method="POST" action="{{ url_for('login_verify') }}" autocomplete="off">
+            <p class="small mb-3">Enter the 6-digit code from your authenticator app. Lost your phone? Enter one of your recovery codes instead.</p>
+            <div class="mb-4">
+                <label class="form-label" for="code">Code</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-shield-lock"></i></span>
+                    <input type="text" class="form-control form-control-lg" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" maxlength="16" autofocus required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-check2-circle me-2"></i>Verify</button>
+            <a class="d-block text-center small mt-3" href="{{ url_for('login_page') }}">Start over</a>
+        </form>
+        {% else %}
+        <form method="POST">
+            {% if mode == 'multi' %}
+            <div class="mb-3">
+                <label class="form-label" for="email">Email</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                    <input type="text" inputmode="email" class="form-control" id="email" name="email" value="{{ email or '' }}" placeholder="you@yourdomain.com" autocomplete="username" autocapitalize="off" spellcheck="false" {% if not email %}autofocus{% endif %} required>
+                </div>
+            </div>
+            {% endif %}
+            <div class="mb-4">
+                <label class="form-label" data-i18n="password">Password</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-key"></i></span>
+                    <input type="password" class="form-control" name="password" data-i18n-ph="enterPassword" placeholder="Enter password" autocomplete="current-password" {% if mode != 'multi' or email %}autofocus{% endif %} required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">
+                <i class="bi bi-box-arrow-in-right me-2"></i><span data-i18n="login">Login</span>
+            </button>
+        </form>
+        {% endif %}
+    </div>
+
+    <script>
+        const LANGS = {
+            en: { password: 'Password', enterPassword: 'Enter password', login: 'Login' }
+        };
+        function t(key) { return LANGS.en[key] || key; }
+
+        function applyLang() {
+            document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+            document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+            document.documentElement.lang = 'en';
+        }
+
+        applyLang();
+
+        (function () {
+            var box = document.getElementById('theme-swatches');
+            if (!box || !window.BearerTheme) return;
+            function draw() {
+                var cur = BearerTheme.get();
+                box.innerHTML = '';
+                BearerTheme.list.forEach(function (t) {
+                    var b = document.createElement('button');
+                    b.type = 'button'; b.title = t.name; b.setAttribute('aria-label', t.name);
+                    b.className = 'swatch-btn' + (t.id === cur ? ' active' : '');
+                    b.style.background = 'linear-gradient(135deg,' + t.swatch[0] + ' 0 50%,' + t.swatch[1] + ' 50% 100%)';
+                    b.onclick = function () { BearerTheme.set(t.id); draw(); };
+                    box.appendChild(b);
+                });
+            }
+            draw();
+        })();
+    </script>
+</body>
+</html>

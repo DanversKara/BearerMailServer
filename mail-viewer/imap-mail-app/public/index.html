@@ -1,0 +1,2002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>External Accounts</title>
+<!-- Served by the BearerMail web app (this page is shown under /imap/); nothing loads from outside CDNs. -->
+<link href="/static/vendor/fonts/satisfy.css" rel="stylesheet">
+<link href="/static/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --embed-primary: #5b9a8b;
+  --embed-primary-hover: #4a8a7b;
+  --embed-bg: #f5f9f7;
+  --embed-surface: #ffffff;
+  --embed-surface-soft: rgba(245,249,247,0.95);
+  --embed-border: #d4e4de;
+  --embed-text: #1a2421;
+  --embed-muted: #4a5752;
+  --embed-navy: #4a7c9b;
+  --embed-shadow: 0 2px 8px rgba(91,154,139,0.12);
+  --embed-shadow-lg: 0 10px 28px rgba(91,154,139,0.16);
+  --embed-radius: 10px;
+  --embed-radius-sm: 6px;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  color: var(--embed-text);
+  background: linear-gradient(135deg, #ffffff 0%, #fafcfb 30%, var(--embed-bg) 60%, #ffffff 100%);
+  background-attachment: fixed;
+  line-height: 1.55;
+}
+
+html.embedded-mode .sidebar-header {
+  display: none;
+}
+
+.embedded-shell {
+  min-height: 100vh;
+}
+
+.embedded-topbar {
+  display: none;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+  background: transparent;
+  width: min(100%, 1680px);
+  margin: 0 auto;
+
+  padding: 24px;
+  gap: 20px;
+}
+
+.sidebar {
+  width: 230px;
+  min-width: 230px;
+  border: 1px solid var(--embed-border);
+  display: flex;
+  flex-direction: column;
+  background: var(--embed-surface-soft);
+  overflow-y: auto;
+  backdrop-filter: blur(6px);
+  border-radius: var(--embed-radius);
+  box-shadow: var(--embed-shadow);
+}
+
+.sidebar-header {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--embed-border);
+  font-size: 1.1rem;
+  font-weight: 400;
+  letter-spacing: 1px;
+  font-family: "Satisfy", cursive;
+  color: #2a5f8a;
+  position: relative;
+}
+
+.sidebar-header::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: -1px;
+  height: 4px;
+  background: repeating-linear-gradient(45deg, var(--embed-primary) 0 10px, #ffffff 10px 20px, var(--embed-navy) 20px 30px, #ffffff 30px 40px);
+  opacity: 0.45;
+}
+
+.sidebar-section {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--embed-border);
+}
+
+.sidebar-section-title {
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--embed-muted);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.account-item, .folder-item {
+  padding: 6px 16px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  color: var(--embed-text);
+}
+
+.account-item:hover, .folder-item:hover { background: #edf5f2; }
+.account-item.active, .folder-item.active { background: #e7f2ee; border-left: 3px solid var(--embed-primary); padding-left: 13px; }
+
+.account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.account-remove {
+  font-size: 12px;
+  color: var(--embed-muted);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0 4px;
+}
+
+.account-remove:hover { color: #c76b6b; }
+
+.sidebar-buttons {
+  padding: 8px 16px;
+  display: flex;
+  gap: 6px;
+}
+
+.btn {
+  flex: 1;
+  padding: 7px 0;
+  border: 1px solid var(--embed-border);
+  background: var(--embed-surface);
+  cursor: pointer;
+  font-size: 13px;
+  text-align: center;
+  transition: all 0.15s ease;
+  border-radius: var(--embed-radius-sm);
+  color: var(--embed-text);
+}
+
+.btn:hover { background: var(--embed-bg); border-color: var(--embed-primary); }
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--embed-border);
+  border-radius: var(--embed-radius);
+  background: rgba(255,255,255,0.88);
+  box-shadow: var(--embed-shadow);
+  overflow: hidden;
+}
+
+.toolbar {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--embed-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--embed-surface-soft);
+  backdrop-filter: blur(6px);
+}
+
+.toolbar input[type="text"] {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid var(--embed-border);
+  font-size: 14px;
+  outline: none;
+  border-radius: var(--embed-radius-sm) 0 0 var(--embed-radius-sm);
+  background: #fbfdfc;
+  color: var(--embed-text);
+}
+
+.toolbar input[type="text"]:focus { border-color: var(--embed-primary); background: #fff; box-shadow: 0 0 0 2px rgba(91,154,139,0.12); }
+
+.toolbar button {
+  padding: 7px 12px;
+  border: 1px solid var(--embed-border);
+  background: var(--embed-surface);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  border-radius: var(--embed-radius-sm);
+  color: var(--embed-text);
+}
+
+.toolbar button:first-of-type { border-radius: 0 var(--embed-radius-sm) var(--embed-radius-sm) 0; border-left: none; }
+
+.toolbar button:hover { background: var(--embed-bg); border-color: var(--embed-primary); }
+
+.mail-info {
+  font-size: 13px;
+  color: var(--embed-muted);
+  white-space: nowrap;
+}
+
+.mail-list-container {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+.mail-list-pane {
+  width: 320px;
+  min-width: 260px;
+  max-width: 400px;
+  overflow-y: auto;
+  border-right: 1px solid var(--embed-border);
+  background: transparent;
+  flex-shrink: 0;
+  padding-top: 8px;
+}
+
+.mail-row {
+  padding: 10px 14px;
+  margin: 0 8px 8px;
+  border: 1px solid var(--embed-border);
+  border-radius: var(--embed-radius-sm);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  transition: all 0.15s ease;
+  position: relative;
+  align-items: flex-start;
+  background: var(--embed-surface);
+}
+
+.mail-row:hover { background: rgba(91,154,139,0.08); }
+.mail-row.active {
+  background: rgba(91,154,139,0.15);
+  border-left: 3px solid var(--embed-primary);
+}
+.mail-row.unread {
+  border-left: 3px solid var(--embed-navy);
+  background: rgba(74,124,155,0.06);
+}
+.mail-row.unread .mail-from {
+  font-weight: 700;
+  color: var(--embed-text);
+}
+.mail-row.unread .mail-subject {
+  font-weight: 600;
+  color: var(--embed-text);
+}
+.mail-row:not(.unread) .mail-from {
+  font-weight: 400;
+  color: var(--embed-muted);
+}
+.mail-row:not(.unread) .mail-subject {
+  font-weight: 400;
+  color: var(--embed-muted);
+}
+.mail-row.active .mail-from,
+.mail-row.active .mail-subject {
+  font-weight: 700;
+  color: var(--embed-text);
+}
+
+.mail-col { min-width: 0; flex: 1; }
+
+.mail-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.mail-from {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.mail-subject {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-date {
+  font-size: 12px;
+  color: var(--embed-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  opacity: 0.72;
+}
+
+.mail-detail {
+  flex: 1;
+  overflow-y: auto;
+  background: rgba(255,255,255,0.96);
+  height: 100%;
+}
+
+.load-more-btn {
+  padding: 12px;
+  text-align: center;
+  color: var(--embed-muted);
+  cursor: pointer;
+  border-top: 1px solid var(--embed-border);
+  font-size: 13px;
+  transition: all 0.15s ease;
+}
+
+.load-more-btn:hover {
+  background: rgba(245,249,247,0.72);
+  color: var(--embed-text);
+}
+
+.detail-empty {
+  padding: 56px 24px;
+  text-align: center;
+  color: var(--embed-muted);
+  font-size: 15px;
+}
+
+.detail-empty::before {
+  content: "✉";
+  display: block;
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 14px;
+  opacity: 0.32;
+  color: var(--embed-navy);
+}
+
+.detail-empty strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--embed-text);
+}
+
+.detail-empty span {
+  display: block;
+  line-height: 1.7;
+}
+
+.detail-header {
+  padding: 20px 20px 6px;
+}
+
+.detail-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+  gap: 12px;
+}
+
+.detail-row {
+  margin-bottom: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.detail-row strong,
+.detail-top-row strong {
+  color: var(--embed-text);
+}
+
+.detail-divider {
+  border: none;
+  border-top: 1px solid var(--embed-border);
+  margin: 0;
+}
+
+.detail-back {
+  display: none;
+  border: 1px solid var(--embed-border);
+  background: var(--embed-surface);
+  color: var(--embed-primary);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.detail-back:hover {
+  background: var(--embed-bg);
+  border-color: var(--embed-primary);
+}
+
+.detail-body {
+  padding: 20px;
+  line-height: 1.6;
+}
+
+.mail-body-container {
+  background: #f8f9fa;
+  padding: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mail-body-container pre {
+  padding: 16px 20px;
+  margin: 0;
+}
+
+.detail-body iframe {
+  width: 100%;
+  border: none;
+  min-height: 200px;
+  background: #fff;
+}
+
+.detail-attachments {
+  padding: 12px 20px;
+  font-size: 14px;
+  background: rgba(245,249,247,0.65);
+}
+
+.detail-attachments span {
+  display: inline-block;
+  margin-right: 16px;
+  color: var(--embed-muted);
+}
+
+.detail-attachments a {
+  display: inline-block;
+  margin-right: 16px;
+  color: var(--embed-muted);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(91,154,139,0.45);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.detail-attachments a:hover {
+  color: var(--embed-primary);
+  border-bottom-color: var(--embed-primary);
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.detail-actions .action-btn {
+  border: 1px solid var(--embed-border);
+  background: var(--embed-surface);
+  color: var(--embed-muted);
+  border-radius: var(--embed-radius-sm);
+  padding: 4px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.detail-actions .action-btn:hover { color: var(--embed-text); border-color: var(--embed-primary); background: var(--embed-bg); }
+.detail-actions .action-btn.danger:hover { color: #c76b6b; border-color: #c76b6b; }
+.detail-actions .action-btn .bi-star-fill { color: #e8a73d; }
+
+.detail-actions .action-select {
+  border: 1px solid var(--embed-border);
+  background: var(--embed-surface);
+  color: var(--embed-muted);
+  border-radius: var(--embed-radius-sm);
+  padding: 4px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.mail-star {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--embed-border);
+  transition: color 0.15s ease;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.mail-star:hover { color: #e8a73d; }
+.mail-star.active { color: #e8a73d; }
+
+.batch-bar {
+  padding: 6px 16px;
+  background: var(--embed-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.batch-bar button {
+  border: 1px solid rgba(255,255,255,0.4);
+  background: transparent;
+  color: #fff;
+  border-radius: var(--embed-radius-sm);
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.batch-bar button:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
+.batch-bar button.danger:hover { background: rgba(199,107,107,0.5); border-color: rgba(199,107,107,0.7); }
+.batch-bar .batch-count { margin-right: auto; font-weight: 600; }
+
+.mail-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--embed-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.search-field-select {
+  border: 1px solid var(--embed-border);
+  background: var(--embed-surface);
+  color: var(--embed-muted);
+  padding: 7px 6px;
+  font-size: 13px;
+  border-radius: var(--embed-radius-sm) 0 0 var(--embed-radius-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+.search-field-select + input[type="text"] { border-radius: 0; border-left: none; }
+
+.folder-badge {
+  background: var(--embed-primary);
+  color: #fff;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+  line-height: 18px;
+  float: right;
+}
+
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(26,36,33,0.18);
+  z-index: 100;
+  justify-content: center;
+  align-items: center;
+  backdrop-filter: blur(4px);
+}
+
+.modal-overlay.show { display: flex; }
+
+.modal {
+  background: var(--embed-surface);
+  padding: 24px;
+  width: 420px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: var(--embed-radius);
+  border: 1px solid var(--embed-border);
+  box-shadow: var(--embed-shadow-lg);
+}
+
+.modal h3 {
+  margin-bottom: 16px;
+  font-size: 16px;
+  color: var(--embed-text);
+}
+
+.modal label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--embed-muted);
+}
+
+.modal input, .modal select, .modal textarea {
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border: 1px solid var(--embed-border);
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  border-radius: var(--embed-radius-sm);
+  background: #fbfdfc;
+  color: var(--embed-text);
+}
+
+.modal input:focus, .modal select:focus, .modal textarea:focus {
+  border-color: var(--embed-primary);
+  box-shadow: 0 0 0 2px rgba(91,154,139,0.12);
+}
+
+.modal textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.modal-buttons button {
+  padding: 7px 16px;
+  border: 1px solid var(--embed-border);
+  background: var(--embed-surface);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s ease;
+  border-radius: var(--embed-radius-sm);
+  color: var(--embed-text);
+}
+
+.modal-buttons button:hover { background: var(--embed-bg); border-color: var(--embed-primary); }
+
+.modal-buttons button.primary {
+  background: var(--embed-primary);
+  color: #fff;
+  border-color: var(--embed-primary);
+}
+
+.modal-buttons button.primary:hover { background: var(--embed-primary-hover); border-color: var(--embed-primary-hover); }
+
+.custom-fields { display: none; }
+
+.error-msg {
+  color: #c76b6b;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+@keyframes pulse { 0%,100% { opacity: 0.4 } 50% { opacity: 1 } }
+
+.loading {
+  padding: 28px 20px;
+  text-align: center;
+  color: var(--embed-muted);
+  animation: pulse 1.4s ease-in-out infinite;
+  font-size: 14px;
+}
+
+.copy-btn {
+  display: inline-block;
+  cursor: pointer;
+  margin-left: 6px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--embed-muted);
+  border: 1px solid var(--embed-border);
+  border-radius: 4px;
+  background: var(--embed-surface);
+  vertical-align: middle;
+  line-height: 17px;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.copy-btn:hover { color: var(--embed-text); border-color: var(--embed-primary); background: var(--embed-bg); }
+
+.copy-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--embed-primary);
+  color: #fff;
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: var(--embed-radius-sm);
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  box-shadow: var(--embed-shadow);
+  font-weight: 500;
+}
+
+.copy-toast.show { opacity: 1; }
+
+.batch-results {
+  margin-top: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 13px;
+  border: 1px solid var(--embed-border);
+  display: none;
+  border-radius: var(--embed-radius-sm);
+  background: rgba(245,249,247,0.65);
+}
+
+.batch-results.show { display: block; }
+
+.batch-row {
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(212,228,222,0.7);
+  display: flex;
+  justify-content: space-between;
+}
+
+.batch-row.success { color: var(--embed-primary); }
+.batch-row.fail { color: #c76b6b; }
+
+.batch-hint {
+  font-size: 13px;
+  color: var(--embed-muted);
+  margin-bottom: 12px;
+}
+
+.batch-summary {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--embed-border);
+  font-weight: 600;
+  color: var(--embed-text);
+  background: rgba(245,249,247,0.85);
+}
+
+/* tabs */
+.modal-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--embed-border);
+  margin-bottom: 16px;
+}
+
+.modal-tab {
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  border-bottom: 2px solid transparent;
+  color: var(--embed-muted);
+  transition: all 0.15s ease;
+}
+
+.modal-tab:hover { color: var(--embed-text); }
+.modal-tab.active { color: var(--embed-text); border-bottom-color: var(--embed-primary); }
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c7d8d1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #a8c0b7; }
+
+@media (max-width: 991.98px) {
+  .app {
+    flex-direction: column;
+    height: auto;
+    min-height: 100dvh;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 0;
+    border-right: 1px solid var(--embed-border);
+  }
+
+  .sidebar-buttons {
+    flex-wrap: wrap;
+  }
+
+  .sidebar-buttons .btn {
+    flex: 1 1 calc(50% - 3px);
+    min-width: 140px;
+  }
+
+  .main {
+    min-height: 0;
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+
+  .toolbar input[type="text"] {
+    flex: 1 1 100%;
+    width: 100%;
+    border-radius: 4px;
+  }
+
+  .toolbar button:first-of-type {
+    border-left: 1px solid var(--embed-border);
+    border-radius: var(--embed-radius-sm);
+  }
+
+  .mail-list-container {
+    flex-direction: column;
+  }
+
+  .mail-list-pane {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    border-right: none;
+    border-bottom: 1px solid var(--embed-border);
+    flex-shrink: 1;
+  }
+
+  .mail-list-pane,
+  .mail-detail {
+    min-height: calc(100dvh - 280px);
+  }
+
+  .mail-row {
+    padding: 10px 12px;
+    margin: 0 6px 6px;
+  }
+
+  .mail-from,
+  .mail-subject {
+    white-space: normal;
+    line-height: 1.5;
+  }
+
+  .detail-back {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .app.mobile-view-list .mail-detail {
+    display: none;
+  }
+
+  .app.mobile-view-detail .sidebar,
+  .app.mobile-view-detail .toolbar,
+  .app.mobile-view-detail .mail-list-pane {
+    display: none;
+  }
+
+  .app.mobile-view-detail .mail-detail {
+    display: block;
+    min-height: 100dvh;
+  }
+}
+
+html.embedded-mode body {
+  color: var(--embed-text);
+  background: linear-gradient(135deg, #ffffff 0%, #fafcfb 35%, var(--embed-bg) 100%);
+}
+
+html.embedded-mode .embedded-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+html.embedded-mode .embedded-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  background: rgba(245,249,247,0.96);
+  border-bottom: 1px solid var(--embed-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+html.embedded-mode .embedded-topbar::after {
+  display: none;
+}
+
+html.embedded-mode .embedded-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+html.embedded-mode .embedded-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--embed-text);
+}
+
+html.embedded-mode .embedded-subtitle {
+  display: none;
+}
+
+html.embedded-mode .embedded-home-btn {
+  border: 1px solid var(--embed-border);
+  background: var(--embed-surface);
+  color: var(--embed-primary);
+  border-radius: 4px;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html.embedded-mode .embedded-home-btn:hover {
+  background: var(--embed-bg);
+  border-color: var(--embed-primary);
+}
+
+html.embedded-mode .app {
+  height: calc(100vh - 62px);
+  padding: 16px;
+  gap: 16px;
+}
+
+html.embedded-mode .sidebar {
+  background: rgba(245,249,247,0.95);
+  border-color: var(--embed-border);
+}
+
+html.embedded-mode .sidebar-section,
+html.embedded-mode .toolbar,
+html.embedded-mode .mail-list-pane,
+html.embedded-mode .detail-header,
+html.embedded-mode .detail-attachments {
+  border-color: var(--embed-border);
+}
+
+html.embedded-mode .toolbar {
+  background: rgba(245,249,247,0.9);
+}
+
+html.embedded-mode .toolbar input[type="text"],
+html.embedded-mode .modal input,
+html.embedded-mode .modal select,
+html.embedded-mode .modal textarea {
+  border-color: var(--embed-border);
+  background: #fbfdfc;
+}
+
+html.embedded-mode .toolbar input[type="text"]:focus,
+html.embedded-mode .modal input:focus,
+html.embedded-mode .modal select:focus,
+html.embedded-mode .modal textarea:focus {
+  border-color: var(--embed-primary);
+  box-shadow: 0 0 0 2px rgba(91,154,139,0.12);
+}
+
+html.embedded-mode .btn,
+html.embedded-mode .toolbar button,
+html.embedded-mode .modal-buttons button {
+  border-color: var(--embed-border);
+  color: var(--embed-text);
+  background: var(--embed-surface);
+}
+
+html.embedded-mode .btn:hover,
+html.embedded-mode .toolbar button:hover,
+html.embedded-mode .modal-buttons button:hover {
+  background: var(--embed-bg);
+  border-color: var(--embed-primary);
+}
+
+html.embedded-mode .modal-buttons button.primary {
+  background: var(--embed-primary);
+  border-color: var(--embed-primary);
+  color: #fff;
+}
+
+html.embedded-mode .modal-buttons button.primary:hover {
+  background: var(--embed-primary-hover);
+  border-color: var(--embed-primary-hover);
+}
+
+html.embedded-mode .account-item:hover,
+html.embedded-mode .folder-item:hover,
+html.embedded-mode .mail-row:hover,
+html.embedded-mode .mail-row.active {
+  background: #edf5f2;
+}
+
+html.embedded-mode .account-item.active,
+html.embedded-mode .folder-item.active,
+html.embedded-mode .mail-row.unread {
+  border-left-color: var(--embed-primary);
+}
+
+html.embedded-mode .account-item.active,
+html.embedded-mode .folder-item.active {
+  background: #e7f2ee;
+}
+
+html.embedded-mode .mail-row.unread .dot {
+  background: var(--embed-primary);
+}
+
+html.embedded-mode .copy-toast {
+  background: var(--embed-primary);
+}
+
+html.embedded-mode .detail-back {
+  color: var(--embed-primary);
+  border-color: var(--embed-border);
+}
+
+html.embedded-mode .detail-back:hover {
+  background: var(--embed-bg);
+  border-color: var(--embed-primary);
+}
+
+.bm-privacy { display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:0.85rem; padding:8px 10px; margin:0 0 10px; border-radius:6px; background:rgba(91,154,139,0.08); border:1px solid rgba(91,154,139,0.25); }
+.bm-privacy .action-btn { margin-left:auto; }
+</style>
+</head>
+<body>
+<script>
+if (new URLSearchParams(window.location.search).get('embedded') === '1') {
+  document.documentElement.classList.add('embedded-mode');
+}
+</script>
+
+<div class="copy-toast" id="copy-toast">Copied</div>
+<div class="embedded-shell">
+  <div class="embedded-topbar">
+    <div class="embedded-topbar-left">
+      <button type="button" class="embedded-home-btn" onclick="goBackToMailboxHome()" aria-label="Back to mailbox home" title="Back to mailbox home">←</button>
+      <div class="embedded-title" data-i18n="embeddedTitle">BearerMail IMAP</div>
+    </div>
+  </div>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header" data-i18n="brandTitle">BearerMail</div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-title" data-i18n="accountSection">Accounts</div>
+      <div id="account-list"></div>
+      <div class="sidebar-buttons">
+        <div class="btn" onclick="showAddModal('single')" data-i18n="addAccount">Add account</div>
+        <div class="btn" onclick="showAddModal('batch')" data-i18n="batchImport">Batch import</div>
+      </div>
+    </div>
+    <div class="sidebar-section" id="folder-section" style="display:none">
+      <div class="sidebar-section-title" data-i18n="folderSection">Folders</div>
+      <div id="folder-list"></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="toolbar">
+      <select class="search-field-select" id="search-field">
+        <option value="subject" data-i18n="searchSubject">Subject</option>
+        <option value="from" data-i18n="searchFrom">From</option>
+        <option value="body" data-i18n="searchBody">Body</option>
+        <option value="all" data-i18n="searchAll">All</option>
+      </select>
+      <input type="text" id="search-input" data-i18n-ph="searchPlaceholder" placeholder="Search sender / subject...">
+      <button onclick="doSearch()" data-i18n="searchButton">Search mail</button>
+      <button onclick="refreshMails()" data-i18n="refreshButton">Refresh list</button>
+      <button onclick="toggleSelectMode()" id="select-mode-btn" title="Select"><i class="bi bi-check2-square"></i></button>
+      <span class="mail-info" id="mail-info"></span>
+    </div>
+    <div class="batch-bar" id="batch-bar" style="display:none;">
+      <span class="batch-count" id="batch-count">0</span>
+      <button onclick="batchSelectAll()" data-i18n="selectAll">All</button>
+      <button onclick="batchDeselectAll()" data-i18n="deselectAll">None</button>
+      <button onclick="doBatchAction('read')" data-i18n="batchRead">Read</button>
+      <button onclick="doBatchAction('unread')" data-i18n="batchUnread">Unread</button>
+      <button onclick="doBatchAction('flag')" data-i18n="batchStar">Star</button>
+      <button class="danger" onclick="doBatchAction('delete')" data-i18n="batchDelete">Delete</button>
+    </div>
+    <div class="mail-list-container">
+      <div class="mail-list-pane" id="mail-list">
+        <div class="detail-empty"><strong>No mailbox connected yet</strong><span>Add an IMAP mailbox (Gmail, Outlook, Yahoo...) to read its mail inside BearerMail.</span></div>
+      </div>
+      <div class="mail-detail" id="mail-detail">
+        <div class="detail-empty"><strong>Select a message</strong><span>Pick a message on the left to read its body, attachments and sender details.</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <h3 data-i18n="modalTitle">Connect IMAP mailbox</h3>
+    <div class="modal-tabs">
+      <div class="modal-tab active" data-tab="single" onclick="switchTab('single')" data-i18n="singleTab">Single account</div>
+      <div class="modal-tab" data-tab="batch" onclick="switchTab('batch')" data-i18n="batchImport">Batch import</div>
+    </div>
+
+    <div class="tab-content active" id="tab-single">
+      <div class="error-msg" id="modal-error"></div>
+      <label data-i18n="presetLabel">Mailbox type</label>
+      <select id="m-preset" onchange="onPresetChange()">
+        <option value="" data-i18n="loading">Loading...</option>
+      </select>
+      <div class="custom-fields" id="custom-fields">
+        <label data-i18n="hostLabel">IMAP server</label>
+        <input id="m-host" placeholder="imap.example.com">
+        <label data-i18n="portLabel">Port</label>
+        <input id="m-port" value="993">
+      </div>
+      <label data-i18n="emailLabel">Email address</label>
+      <input id="m-email" type="email" placeholder="you@example.com">
+      <label data-i18n="passwordLabel">Password / app password</label>
+      <input id="m-pass" type="password" data-i18n-ph="passwordPlaceholder" placeholder="Password">
+      <div class="modal-buttons">
+        <button onclick="hideAddModal()" data-i18n="cancel">Cancel</button>
+        <button class="primary" onclick="doAddAccount()" data-i18n="connectButton">Connect mailbox</button>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-batch">
+      <div class="error-msg" id="batch-error"></div>
+      <label data-i18n="batchLabel">Accounts (one per line, format: email:password)</label>
+      <textarea id="batch-input" placeholder="user1@gmail.com:password1
+user2@gmx.com:password2
+user3@outlook.com:password3"></textarea>
+      <p class="batch-hint" data-i18n="batchHint">Auto-detects IMAP settings for Gmail, GMX, Outlook, QQ, 163, Yahoo, and more.</p>
+      <div class="batch-results" id="batch-results"></div>
+      <div class="modal-buttons">
+        <button onclick="hideAddModal()" data-i18n="cancel">Cancel</button>
+        <button class="primary" onclick="doBatchImport()" data-i18n="startImport">Start import</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let activeAccountId = null;
+let activeFolder = 'INBOX';
+let mailCache = [];
+let hasMore = false;
+let oldestSeq = null;
+let detailVisible = false;
+let selectMode = false;
+let selectedUids = new Set();
+let folderCache = [];
+const LANGS = {
+  en: {
+    embeddedTitle: 'BearerMail IMAP',
+    brandTitle: 'BearerMail',
+    accountSection: 'Accounts',
+    folderSection: 'Folders',
+    addAccount: 'Add account',
+    batchImport: 'Batch import',
+    searchPlaceholder: 'Search sender / subject...',
+    searchButton: 'Search mail',
+    refreshButton: 'Refresh list',
+    modalTitle: 'Connect IMAP mailbox',
+    singleTab: 'Single account',
+    presetLabel: 'Mailbox type',
+    loading: 'Loading...',
+    hostLabel: 'IMAP server',
+    portLabel: 'Port',
+    emailLabel: 'Email address',
+    passwordLabel: 'Password / app password',
+    passwordPlaceholder: 'Password',
+    cancel: 'Cancel',
+    connectButton: 'Connect mailbox',
+    batchLabel: 'Accounts (one per line, format: email:password)',
+    batchHint: 'Auto-detects IMAP settings for Gmail, GMX, Outlook, QQ, 163, Yahoo, and more.',
+    startImport: 'Start import',
+    emptyAccountsTitle: 'No mailbox connected yet',
+    emptyAccountsDesc: 'Add an IMAP mailbox to browse everything inside BearerMail.',
+    emptyDetailTitle: 'Select an email',
+    emptyDetailDesc: 'Choose an email from the left to view its body, attachments, and delivery details here.',
+    noMailsTitle: 'No mail here yet',
+    noMailsDesc: 'Try another folder, or refresh to check for the latest messages.',
+    searching: 'Searching...',
+    loadMore: 'Load more',
+    retryLoadMore: 'Load failed, click to retry',
+    backToList: 'Back to list',
+    attachments: 'Attachments',
+    from: 'From',
+    to: 'To',
+    cc: 'Cc',
+    date: 'Date',
+    fillCredentials: 'Please enter both email address and password',
+    importRequired: 'Please enter the account list',
+    importSuccess: 'Success',
+    copiedPrefix: 'Copied: ',
+    infoSummary: '{total} total / {unseen} unread',
+    searchSummary: 'Search results: {count}',
+    importing: 'Importing {count} accounts...',
+    importDone: 'Import complete: {success} succeeded / {total} total',
+    disconnectTitle: 'Disconnect',
+    copyEmailTitle: 'Copy email',
+    customPreset: 'Custom',
+    markRead: 'Mark read',
+    markUnread: 'Mark unread',
+    star: 'Star',
+    unstar: 'Unstar',
+    deleteButton: 'Delete',
+    deleteConfirm: 'Permanently delete this email?',
+    moveToTrash: 'Move to Trash',
+    moveToFolder: 'Move to...',
+    selectMode: 'Select',
+    exitSelectMode: 'Cancel',
+    selectAll: 'All',
+    deselectAll: 'None',
+    batchDelete: 'Delete',
+    batchRead: 'Read',
+    batchUnread: 'Unread',
+    batchStar: 'Star',
+    batchMove: 'Move',
+    batchConfirmDelete: 'Delete {n} selected emails?',
+    searchSubject: 'Subject',
+    searchFrom: 'From',
+    searchBody: 'Body',
+    searchAll: 'All',
+    operationFailed: 'Operation failed',
+  }
+};
+const currentLang = 'en';
+
+function t(key, vars) {
+  let s = LANGS.en[key] || key;
+  if (vars) {
+    Object.keys(vars).forEach(function(k) {
+      s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]);
+    });
+  }
+  return s;
+}
+
+function richEmpty(titleKey, descKey) {
+  return '<strong>' + esc(t(titleKey)) + '</strong><span>' + esc(t(descKey)) + '</span>';
+}
+
+function refreshStaticText() {
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(function(el) {
+    el.placeholder = t(el.dataset.i18nPh);
+  });
+  document.documentElement.lang = 'en';
+}
+
+
+function applyLang() {
+  refreshStaticText();
+  if (!activeAccountId) {
+    document.getElementById('mail-list').innerHTML = '<div class="detail-empty">' + richEmpty('emptyAccountsTitle', 'emptyAccountsDesc') + '</div>';
+  } else if (mailCache.length === 0) {
+    renderMailList(mailCache);
+  } else {
+    renderMailList(mailCache);
+  }
+  if (!detailVisible) {
+    resetMailDetail();
+  } else if (selectedMailIndex >= 0 && mailCache[selectedMailIndex]) {
+    readMail(selectedMailIndex);
+  }
+  document.getElementById('m-preset').querySelectorAll('option[data-i18n]').forEach(function(opt) {
+    opt.textContent = t(opt.dataset.i18n);
+  });
+}
+
+window.addEventListener('message', function(event) {
+  if (event.origin !== window.location.origin) return;
+});
+
+async function api(method, url, body) {
+  const opts = { method, headers: {} };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+async function loadAccounts() {
+  const list = await api('GET', '/api/accounts');
+  const el = document.getElementById('account-list');
+  if (list.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = list.map(a => `
+    <div class="account-item ${a.id === activeAccountId ? 'active' : ''}"
+         onclick="selectAccount(${a.id})">
+      <span class="account-name" title="${esc(a.email)}">${esc(a.email)}</span>
+      <span class="copy-btn" data-email="${esc(a.email)}" onclick="copyEmail(this.dataset.email, event)" title="${esc(t('copyEmailTitle'))}">&#x2398;</span>
+      <button class="account-remove" onclick="event.stopPropagation();removeAccount(${a.id})" title="${esc(t('disconnectTitle'))}">x</button>
+    </div>
+  `).join('');
+}
+
+async function selectAccount(id) {
+  activeAccountId = id;
+  activeFolder = 'INBOX';
+  detailVisible = false;
+  syncResponsiveView();
+  loadAccounts();
+  loadFolders(id);
+  loadMails();
+}
+
+async function removeAccount(id) {
+  await api('DELETE', '/api/accounts/' + id);
+  if (activeAccountId === id) {
+    activeAccountId = null;
+    document.getElementById('folder-section').style.display = 'none';
+    document.getElementById('mail-list').innerHTML = '<div class="detail-empty">' + richEmpty('emptyAccountsTitle', 'emptyAccountsDesc') + '</div>';
+    resetMailDetail();
+    document.getElementById('mail-info').textContent = '';
+  }
+  loadAccounts();
+}
+
+async function loadFolders(id) {
+  const folders = await api('GET', '/api/accounts/' + id + '/folders');
+  const selectable = folders.filter(f => !f.noselect);
+  folderCache = selectable;
+  document.getElementById('folder-section').style.display = 'block';
+  const el = document.getElementById('folder-list');
+  el.innerHTML = selectable.map(f => `
+    <div class="folder-item ${f.path === activeFolder ? 'active' : ''}"
+         data-path="${esc(f.path)}" onclick="selectFolder(this.dataset.path)">
+      ${esc(translateFolder(f.name))}
+      <span class="folder-badge" id="badge-${f.path.replace(/[^a-zA-Z0-9]/g,'_')}" style="display:none"></span>
+    </div>
+  `).join('');
+  // Load unread counts in background
+  loadFolderStatus(id);
+}
+
+async function loadFolderStatus(id) {
+  try {
+    var statuses = await api('GET', '/api/accounts/' + id + '/folders/status');
+    statuses.forEach(function(s) {
+      if (s.unseen > 0) {
+        var badge = document.getElementById('badge-' + s.path.replace(/[^a-zA-Z0-9]/g, '_'));
+        if (badge) { badge.textContent = s.unseen; badge.style.display = ''; }
+      }
+    });
+  } catch (e) {}
+}
+
+function selectFolder(path) {
+  activeFolder = path;
+  detailVisible = false;
+  syncResponsiveView();
+  loadFolders(activeAccountId);
+  loadMails();
+}
+
+function isMobileLayout() {
+  return window.matchMedia('(max-width: 991.98px)').matches;
+}
+
+function syncResponsiveView() {
+  const app = document.querySelector('.app');
+  if (!app) return;
+  app.classList.toggle('mobile-view-detail', isMobileLayout() && detailVisible);
+  app.classList.toggle('mobile-view-list', isMobileLayout() && !detailVisible);
+}
+
+function resetMailDetail(message) {
+  detailVisible = false;
+  document.getElementById('mail-detail').innerHTML = '<div class="detail-empty">' + (message || richEmpty('emptyDetailTitle', 'emptyDetailDesc')) + '</div>';
+  syncResponsiveView();
+}
+
+function showMailListView() {
+  detailVisible = false;
+  syncResponsiveView();
+}
+
+function goBackToMailboxHome() {
+  try {
+    if (window.parent && window.parent !== window && typeof window.parent.switchTab === 'function') {
+      window.parent.switchTab('inbox');
+      return;
+    }
+  } catch (e) {}
+  window.parent?.postMessage({ type: 'mail-viewer-switch-tab', tab: 'inbox' }, window.location.origin);
+}
+
+async function loadMails() {
+  if (!activeAccountId) return;
+  detailVisible = false;
+  syncResponsiveView();
+  const el = document.getElementById('mail-list');
+  el.innerHTML = '<div class="loading">' + t('loading') + '</div>';
+  try {
+    const data = await api('GET', '/api/accounts/' + activeAccountId + '/mails?folder=' + encodeURIComponent(activeFolder) + '&count=30');
+    mailCache = data.mails || [];
+    hasMore = data.hasMore;
+    document.getElementById('mail-info').textContent = t('infoSummary', { total: data.total, unseen: data.unseen });
+    renderMailList(mailCache);
+    if (data.hasMore) {
+      oldestSeq = Math.min.apply(null, mailCache.map(function(m) { return m.seq; }));
+      document.getElementById('mail-list').insertAdjacentHTML('beforeend',
+        '<div id="load-more-btn" class="load-more-btn" onclick="loadMoreMails()">' + t('loadMore') + '</div>');
+    }
+  } catch (err) {
+    el.innerHTML = '<div class="detail-empty">' + esc(err.message) + '</div>';
+  }
+}
+
+function renderMailList(mails) {
+  const el = document.getElementById('mail-list');
+  if (mails.length === 0) {
+    el.innerHTML = '<div class="detail-empty">' + richEmpty('noMailsTitle', 'noMailsDesc') + '</div>';
+    return;
+  }
+  el.innerHTML = mails.map(function(m, i) {
+    var fromDisplay = m.from.name ? esc(m.from.name) + ' ' : '';
+    var addr = m.from.address || '';
+    var date = formatDate(m.date);
+    var checkbox = selectMode ? '<input type="checkbox" class="mail-checkbox" ' + (selectedUids.has(String(m.uid)) ? 'checked' : '') + ' onclick="toggleMailSelect(event, \'' + m.uid + '\')">' : '';
+    var starCls = m.flagged ? 'mail-star active' : 'mail-star';
+    var starIcon = m.flagged ? '<i class="bi bi-star-fill"></i>' : '<i class="bi bi-star"></i>';
+    return '<div class="mail-row ' + (m.seen ? '' : 'unread') + (i === selectedMailIndex ? ' active' : '') + '" onclick="readMail(' + i + ')">' +
+      checkbox +
+      '<span class="' + starCls + '" onclick="toggleStarInList(event, ' + i + ')" title="' + esc(t(m.flagged ? 'unstar' : 'star')) + '">' + starIcon + '</span>' +
+      '<div class="mail-col">' +
+        '<div class="mail-row-top">' +
+          '<span class="mail-from">' + (m.from.name ? esc(m.from.name) : esc(addr)) + '</span>' +
+          '<span class="mail-date">' + date + '</span>' +
+        '</div>' +
+        '<div class="mail-subject">' + esc(m.subject) + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function readMail(index) {
+  var mail = mailCache[index];
+  if (!mail) return;
+  selectedMailIndex = index;
+  document.querySelectorAll('.mail-row').forEach(function(r, i) {
+    r.classList.toggle('active', i === index);
+  });
+  var el = document.getElementById('mail-detail');
+  el.innerHTML = '<div class="loading">' + t('loading') + '</div>';
+  try {
+    var data = await api('GET', '/api/accounts/' + activeAccountId + '/mails/' + mail.uid + '?folder=' + encodeURIComponent(activeFolder));
+    var date = data.date ? new Date(data.date).toLocaleString('en-US') : '';
+    var bodyHtml = '';
+    if (data.html) {
+      bodyHtml = '<iframe id="mail-iframe" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>';
+    } else {
+      bodyHtml = '<pre style="white-space:pre-wrap;font-family:inherit;">' + esc(data.text) + '</pre>';
+    }
+    var attachHtml = '';
+    if (data.attachments.length > 0) {
+      attachHtml = '<div class="detail-attachments">' + t('attachments') + ': ' +
+        data.attachments.map(function(a) {
+          var dlUrl = '/api/accounts/' + activeAccountId + '/mails/' + mail.uid + '/attachments/' + a.index + '?folder=' + encodeURIComponent(activeFolder);
+          return '<a href="' + dlUrl + '" download>' + esc(a.filename) + ' (' + (a.size/1024).toFixed(1) + 'KB)</a>';
+        }).join('') + '</div>';
+    }
+    var isSeen = mail.seen;
+    var isFlagged = mail.flagged;
+    var moveOptions = folderCache.filter(function(f) { return f.path !== activeFolder; })
+      .map(function(f) { return '<option value="' + esc(f.path) + '">' + esc(translateFolder(f.name)) + '</option>'; }).join('');
+
+    el.innerHTML =
+      '<div class="detail-header">' +
+        '<button type="button" class="detail-back" onclick="showMailListView()">' + t('backToList') + '</button>' +
+        '<div class="detail-top-row">' +
+          '<div><strong>' + t('from') + ':</strong> ' + makeCopyable(data.from) + '</div>' +
+          '<div class="detail-actions">' +
+            '<button class="action-btn" onclick="toggleReadDetail()" title="' + esc(t(isSeen ? 'markUnread' : 'markRead')) + '"><i class="bi bi-envelope' + (isSeen ? '-open' : '') + '"></i> ' + esc(t(isSeen ? 'markUnread' : 'markRead')) + '</button>' +
+            '<button class="action-btn" onclick="toggleStarDetail()" title="' + esc(t(isFlagged ? 'unstar' : 'star')) + '"><i class="bi bi-star' + (isFlagged ? '-fill' : '') + '"' + (isFlagged ? ' style="color:#e8a73d"' : '') + '></i> ' + esc(t(isFlagged ? 'unstar' : 'star')) + '</button>' +
+            '<button class="action-btn" onclick="moveMailDetail(\'Trash\')" title="' + esc(t('moveToTrash')) + '"><i class="bi bi-trash"></i> ' + esc(t('moveToTrash')) + '</button>' +
+            '<button class="action-btn danger" onclick="deleteMailDetail()" title="' + esc(t('deleteButton')) + '"><i class="bi bi-x-circle"></i> ' + esc(t('deleteButton')) + '</button>' +
+            '<select class="action-select" onchange="moveMailDetail(this.value); this.selectedIndex=0;"><option value="">' + esc(t('moveToFolder')) + '</option>' + moveOptions + '</select>' +
+          '</div>' +
+        '</div>' +
+        '<div class="detail-row"><strong>' + t('to') + ':</strong> ' + makeCopyable(data.to) + '</div>' +
+        (data.cc ? '<div class="detail-row"><strong>' + t('cc') + ':</strong> ' + makeCopyable(data.cc) + '</div>' : '') +
+        '<div class="detail-row"><strong>' + t('subject') + ':</strong> ' + esc(data.subject) + '</div>' +
+        '<div class="detail-row"><strong>' + t('date') + ':</strong> ' + date + '</div>' +
+      '</div>' +
+      '<hr class="detail-divider">' +
+      attachHtml +
+      (data.html ? '<div class="bm-privacy" id="bm-privacy"></div>' : '') +
+      '<div class="detail-body"><div class="mail-body-container">' + bodyHtml + '</div></div>';
+    if (data.html) {
+      var iframe = document.getElementById('mail-iframe');
+      iframe.onload = function() {
+        var doc = iframe.contentDocument;
+        doc.open();
+        doc.write('<!DOCTYPE html><html><head><base target="_blank"><style>img{max-width:100%;height:auto;}img[data-bm-tracker]{display:none!important;}img[data-bm-src]:not([src]):not([data-bm-tracker]){display:inline-block;min-width:24px;min-height:18px;background:repeating-linear-gradient(45deg,#eef2f1,#eef2f1 6px,#e3e9e7 6px,#e3e9e7 12px);}</style></head><body>' + data.html + '</body></html>');
+        doc.close();
+        // Remote images stay hidden until "Show images"; tracking pixels never load.
+        var remote = doc.querySelectorAll('img[data-bm-src]');
+        var trackers = doc.querySelectorAll('img[data-bm-tracker]').length;
+        var bar = document.getElementById('bm-privacy');
+        var showImages = function() {
+          remote.forEach(function(img) { if (!img.hasAttribute('data-bm-tracker')) img.setAttribute('src', img.getAttribute('data-bm-src')); });
+          bar.innerHTML = '<i class="bi bi-image"></i> Images shown' + (trackers ? ' (tracking pixels still blocked)' : '') + '. Loading them lets the sender see this was opened.';
+          setTimeout(recalc, 300);
+        };
+        if (bar) {
+          if (remote.length - trackers > 0) {
+            bar.innerHTML = '<i class="bi bi-eye-slash"></i> <b>Images hidden</b> so the sender cannot tell you opened this' + (trackers ? '. ' + trackers + ' tracking pixel' + (trackers === 1 ? '' : 's') + ' blocked' : '') + '. <button type="button" class="action-btn" id="bm-show-images">Show images</button>';
+            document.getElementById('bm-show-images').onclick = showImages;
+          } else if (trackers) {
+            bar.innerHTML = '<i class="bi bi-shield-check"></i> ' + trackers + ' tracking pixel' + (trackers === 1 ? '' : 's') + ' blocked.';
+          } else {
+            bar.style.display = 'none';
+          }
+        }
+        doc.querySelectorAll('a[href]').forEach(function(a) {
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        });
+        var recalc = function() { iframe.style.height = doc.body.scrollHeight + 40 + 'px'; };
+        doc.querySelectorAll('img').forEach(function(img) {
+          if (!img.complete) {
+            img.addEventListener('load', recalc);
+            img.addEventListener('error', recalc);
+          }
+        });
+        recalc();
+        setTimeout(recalc, 200);
+        setTimeout(recalc, 800);
+      };
+      iframe.src = 'about:blank';
+    }
+    mail.seen = true;
+    detailVisible = true;
+    syncResponsiveView();
+    renderMailList(mailCache);
+  } catch (err) {
+    el.innerHTML = '<div class="detail-empty">' + esc(err.message) + '</div>';
+    detailVisible = true;
+    syncResponsiveView();
+  }
+}
+
+function refreshMails() {
+  loadMails();
+  resetMailDetail();
+}
+
+async function loadMoreMails() {
+  if (!activeAccountId || !oldestSeq) return;
+  var btn = document.getElementById('load-more-btn');
+  if (btn) btn.textContent = t('loading');
+  try {
+    var data = await api('GET', '/api/accounts/' + activeAccountId + '/mails?folder=' + encodeURIComponent(activeFolder) + '&count=30&before=' + oldestSeq);
+    var newMails = data.mails || [];
+    mailCache = mailCache.concat(newMails);
+    hasMore = data.hasMore;
+    if (newMails.length > 0) {
+      oldestSeq = Math.min.apply(null, newMails.map(function(m) { return m.seq; }));
+    }
+    renderMailList(mailCache);
+    if (hasMore) {
+      document.getElementById('mail-list').insertAdjacentHTML('beforeend',
+        '<div id="load-more-btn" class="load-more-btn" onclick="loadMoreMails()">' + t('loadMore') + '</div>');
+    }
+  } catch (err) {
+    if (btn) btn.textContent = t('retryLoadMore');
+  }
+}
+
+async function doSearch() {
+  var q = document.getElementById('search-input').value.trim();
+  if (!q || !activeAccountId) return;
+  detailVisible = false;
+  syncResponsiveView();
+  var el = document.getElementById('mail-list');
+  el.innerHTML = '<div class="loading">' + t('searching') + '</div>';
+  try {
+    var field = document.getElementById('search-field').value || 'subject';
+    var mails = await api('GET', '/api/accounts/' + activeAccountId + '/search?folder=' + encodeURIComponent(activeFolder) + '&q=' + encodeURIComponent(q) + '&field=' + field);
+    mailCache = mails;
+    document.getElementById('mail-info').textContent = t('searchSummary', { count: mails.length });
+    renderMailList(mails);
+  } catch (err) {
+    el.innerHTML = '<div class="detail-empty">' + esc(err.message) + '</div>';
+  }
+}
+
+document.getElementById('search-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doSearch();
+});
+
+function switchTab(tab) {
+  document.querySelectorAll('.modal-tab').forEach(function(t) {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  document.getElementById('tab-single').classList.toggle('active', tab === 'single');
+  document.getElementById('tab-batch').classList.toggle('active', tab === 'batch');
+}
+
+async function showAddModal(tab) {
+  document.getElementById('add-modal').classList.add('show');
+  document.getElementById('modal-error').textContent = '';
+  document.getElementById('batch-error').textContent = '';
+  document.getElementById('batch-results').classList.remove('show');
+  switchTab(tab || 'single');
+  try {
+    var presets = await api('GET', '/api/presets');
+    var sel = document.getElementById('m-preset');
+    sel.innerHTML = '<option value="" data-i18n="loading">' + t('loading') + '</option>' +
+      presets.map(function(p) { return '<option value="' + p + '">' + p + '</option>'; }).join('')
+      + '<option value="custom">' + t('customPreset') + '</option>';
+  } catch(e) {}
+}
+
+function hideAddModal() {
+  document.getElementById('add-modal').classList.remove('show');
+}
+
+function onPresetChange() {
+  document.getElementById('custom-fields').style.display =
+    document.getElementById('m-preset').value === 'custom' ? 'block' : 'none';
+}
+
+async function doAddAccount() {
+  var preset = document.getElementById('m-preset').value;
+  var email = document.getElementById('m-email').value.trim();
+  var password = document.getElementById('m-pass').value;
+  var host = document.getElementById('m-host').value.trim();
+  var port = document.getElementById('m-port').value.trim();
+  var errEl = document.getElementById('modal-error');
+  if (!email || !password) { errEl.textContent = t('fillCredentials'); return; }
+  errEl.textContent = '';
+  try {
+    var acc = await api('POST', '/api/accounts', { preset: preset, email: email, password: password, host: host, port: port });
+    hideAddModal();
+    activeAccountId = acc.id;
+    activeFolder = 'INBOX';
+    await loadAccounts();
+    await loadFolders(acc.id);
+    await loadMails();
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+}
+
+async function doBatchImport() {
+  var text = document.getElementById('batch-input').value.trim();
+  var errEl = document.getElementById('batch-error');
+  var resEl = document.getElementById('batch-results');
+  if (!text) { errEl.textContent = t('importRequired'); return; }
+
+  var lines = text.split('\n').filter(function(l) { return l.trim(); });
+  if (lines.length === 0) { errEl.textContent = t('importRequired'); return; }
+
+  errEl.textContent = '';
+  resEl.innerHTML = '<div class="loading">' + t('importing', { count: lines.length }) + '</div>';
+  resEl.classList.add('show');
+
+  try {
+    var results = await api('POST', '/api/accounts/batch', { lines: lines });
+    var html = '';
+    var successCount = 0;
+    results.forEach(function(r) {
+      if (r.ok) {
+        successCount++;
+        html += '<div class="batch-row success"><span>' + esc(r.email) + '</span><span>' + t('importSuccess') + '</span></div>';
+      } else {
+        html += '<div class="batch-row fail"><span>' + esc(r.email) + '</span><span>' + esc(r.error) + '</span></div>';
+      }
+    });
+    resEl.innerHTML = '<div class="batch-summary">' + t('importDone', { success: successCount, total: results.length }) + '</div>' + html;
+
+    await loadAccounts();
+    if (successCount > 0 && !activeAccountId) {
+      var first = results.find(function(r) { return r.ok; });
+      if (first) selectAccount(first.id);
+    }
+  } catch (err) {
+    errEl.textContent = err.message;
+    resEl.classList.remove('show');
+  }
+}
+
+async function toggleStarInList(event, index) {
+  event.stopPropagation();
+  var mail = mailCache[index];
+  if (!mail || !activeAccountId) return;
+  var action = mail.flagged ? 'remove' : 'add';
+  try {
+    await api('PUT', '/api/accounts/' + activeAccountId + '/mails/' + mail.uid + '/flags?folder=' + encodeURIComponent(activeFolder), { action: action, flags: ['\\Flagged'] });
+    mail.flagged = !mail.flagged;
+    renderMailList(mailCache);
+  } catch (err) {
+    alert(t('operationFailed') + ': ' + err.message);
+  }
+}
+
+async function toggleReadDetail() {
+  if (selectedMailIndex < 0) return;
+  var mail = mailCache[selectedMailIndex];
+  if (!mail || !activeAccountId) return;
+  var action = mail.seen ? 'remove' : 'add';
+  try {
+    await api('PUT', '/api/accounts/' + activeAccountId + '/mails/' + mail.uid + '/flags?folder=' + encodeURIComponent(activeFolder), { action: action, flags: ['\\Seen'] });
+    mail.seen = !mail.seen;
+    renderMailList(mailCache);
+    readMail(selectedMailIndex);
+  } catch (err) {
+    alert(t('operationFailed') + ': ' + err.message);
+  }
+}
+
+async function toggleStarDetail() {
+  if (selectedMailIndex < 0) return;
+  var mail = mailCache[selectedMailIndex];
+  if (!mail || !activeAccountId) return;
+  var action = mail.flagged ? 'remove' : 'add';
+  try {
+    await api('PUT', '/api/accounts/' + activeAccountId + '/mails/' + mail.uid + '/flags?folder=' + encodeURIComponent(activeFolder), { action: action, flags: ['\\Flagged'] });
+    mail.flagged = !mail.flagged;
+    renderMailList(mailCache);
+    readMail(selectedMailIndex);
+  } catch (err) {
+    alert(t('operationFailed') + ': ' + err.message);
+  }
+}
+
+async function deleteMailDetail() {
+  if (selectedMailIndex < 0) return;
+  var mail = mailCache[selectedMailIndex];
+  if (!mail || !activeAccountId) return;
+  if (!confirm(t('deleteConfirm'))) return;
+  try {
+    await api('DELETE', '/api/accounts/' + activeAccountId + '/mails/' + mail.uid + '?folder=' + encodeURIComponent(activeFolder));
+    mailCache.splice(selectedMailIndex, 1);
+    selectedMailIndex = -1;
+    renderMailList(mailCache);
+    resetMailDetail();
+  } catch (err) {
+    alert(t('operationFailed') + ': ' + err.message);
+  }
+}
+
+async function moveMailDetail(destination) {
+  if (!destination || selectedMailIndex < 0) return;
+  var mail = mailCache[selectedMailIndex];
+  if (!mail || !activeAccountId) return;
+  try {
+    await api('POST', '/api/accounts/' + activeAccountId + '/mails/' + mail.uid + '/move?folder=' + encodeURIComponent(activeFolder), { destination: destination });
+    mailCache.splice(selectedMailIndex, 1);
+    selectedMailIndex = -1;
+    renderMailList(mailCache);
+    resetMailDetail();
+  } catch (err) {
+    alert(t('operationFailed') + ': ' + err.message);
+  }
+}
+
+function toggleSelectMode() {
+  selectMode = !selectMode;
+  selectedUids.clear();
+  document.getElementById('batch-bar').style.display = selectMode ? 'flex' : 'none';
+  document.getElementById('select-mode-btn').title = t(selectMode ? 'exitSelectMode' : 'selectMode');
+  updateBatchCount();
+  renderMailList(mailCache);
+  if (hasMore) {
+    document.getElementById('mail-list').insertAdjacentHTML('beforeend',
+      '<div id="load-more-btn" class="load-more-btn" onclick="loadMoreMails()">' + t('loadMore') + '</div>');
+  }
+}
+
+function toggleMailSelect(event, uid) {
+  event.stopPropagation();
+  uid = String(uid);
+  if (selectedUids.has(uid)) { selectedUids.delete(uid); } else { selectedUids.add(uid); }
+  updateBatchCount();
+}
+
+function updateBatchCount() {
+  document.getElementById('batch-count').textContent = selectedUids.size;
+}
+
+function batchSelectAll() {
+  mailCache.forEach(function(m) { selectedUids.add(String(m.uid)); });
+  updateBatchCount();
+  renderMailList(mailCache);
+  if (hasMore) {
+    document.getElementById('mail-list').insertAdjacentHTML('beforeend',
+      '<div id="load-more-btn" class="load-more-btn" onclick="loadMoreMails()">' + t('loadMore') + '</div>');
+  }
+}
+
+function batchDeselectAll() {
+  selectedUids.clear();
+  updateBatchCount();
+  renderMailList(mailCache);
+  if (hasMore) {
+    document.getElementById('mail-list').insertAdjacentHTML('beforeend',
+      '<div id="load-more-btn" class="load-more-btn" onclick="loadMoreMails()">' + t('loadMore') + '</div>');
+  }
+}
+
+async function doBatchAction(action) {
+  if (selectedUids.size === 0 || !activeAccountId) return;
+  if (action === 'delete' && !confirm(t('batchConfirmDelete', { n: selectedUids.size }))) return;
+  var uids = Array.from(selectedUids);
+  try {
+    await api('POST', '/api/accounts/' + activeAccountId + '/batch?folder=' + encodeURIComponent(activeFolder), { uids: uids, action: action });
+    if (action === 'delete') {
+      mailCache = mailCache.filter(function(m) { return !selectedUids.has(String(m.uid)); });
+      selectedUids.clear();
+      updateBatchCount();
+      renderMailList(mailCache);
+      resetMailDetail();
+    } else if (action === 'read') {
+      mailCache.forEach(function(m) { if (selectedUids.has(String(m.uid))) m.seen = true; });
+      renderMailList(mailCache);
+    } else if (action === 'unread') {
+      mailCache.forEach(function(m) { if (selectedUids.has(String(m.uid))) m.seen = false; });
+      renderMailList(mailCache);
+    } else if (action === 'flag') {
+      mailCache.forEach(function(m) { if (selectedUids.has(String(m.uid))) m.flagged = true; });
+      renderMailList(mailCache);
+    } else if (action === 'unflag') {
+      mailCache.forEach(function(m) { if (selectedUids.has(String(m.uid))) m.flagged = false; });
+      renderMailList(mailCache);
+    }
+    if (hasMore) {
+      document.getElementById('mail-list').insertAdjacentHTML('beforeend',
+        '<div id="load-more-btn" class="load-more-btn" onclick="loadMoreMails()">' + t('loadMore') + '</div>');
+    }
+  } catch (err) {
+    alert(t('operationFailed') + ': ' + err.message);
+  }
+}
+
+function copyEmail(text, event) {
+  if (event) event.stopPropagation();
+  navigator.clipboard.writeText(text).then(function() {
+    var toast = document.getElementById('copy-toast');
+    toast.textContent = t('copiedPrefix') + text;
+    toast.classList.add('show');
+    clearTimeout(copyEmail._timer);
+    copyEmail._timer = setTimeout(function() { toast.classList.remove('show'); }, 1500);
+  });
+}
+
+var FOLDER_ZH = {
+  'INBOX': 'Inbox',
+  'Sent': 'Sent',
+  'Sent Messages': 'Sent',
+  'Sent Mail': 'Sent',
+  'Drafts': 'Drafts',
+  'Draft': 'Drafts',
+  'Trash': 'Trash',
+  'Deleted': 'Deleted',
+  'Deleted Messages': 'Deleted',
+  'Deleted Items': 'Deleted',
+  'Junk': 'Junk',
+  'Junk E-mail': 'Junk',
+  'Spam': 'Junk',
+  'Archive': 'Archive',
+  'Archives': 'Archive',
+  'All Mail': 'All Mail',
+  'All': 'All Mail',
+  'Flagged': 'Starred',
+  'Starred': 'Starred',
+  'Important': 'Important',
+  'Notes': 'Notes',
+  'Outbox': 'Outbox',
+};
+
+function translateFolder(name) {
+  if (FOLDER_ZH[name]) return FOLDER_ZH[name];
+  var base = name.replace(/^(\[.*?\]\/?)/, '');
+  if (FOLDER_ZH[base]) return FOLDER_ZH[base];
+  return name;
+}
+
+function esc(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function makeCopyable(text) {
+  if (!text) return '';
+  return esc(text).replace(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/g, function(addr) {
+    return addr + ' <span class="copy-btn" onclick="copyEmail(\'' + addr + '\', event)" title="' + esc(t('copyEmailTitle')) + '">&#x2398;</span>';
+  });
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleString('en-US');
+}
+
+var selectedMailIndex = -1;
+
+document.addEventListener('keydown', function(e) {
+  if (document.getElementById('add-modal').classList.contains('show')) {
+    if (e.key === 'Escape') { hideAddModal(); e.preventDefault(); }
+    return;
+  }
+  var tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+    if (e.key === 'Escape') { document.activeElement.blur(); e.preventDefault(); }
+    return;
+  }
+
+  switch (e.key) {
+    case 'j':
+    case 'ArrowDown':
+      e.preventDefault();
+      if (mailCache.length === 0) break;
+      selectedMailIndex = Math.min(selectedMailIndex + 1, mailCache.length - 1);
+      highlightMail(selectedMailIndex);
+      break;
+    case 'k':
+    case 'ArrowUp':
+      e.preventDefault();
+      if (mailCache.length === 0) break;
+      selectedMailIndex = Math.max(selectedMailIndex - 1, 0);
+      highlightMail(selectedMailIndex);
+      break;
+    case 'Enter':
+    case 'o':
+      if (selectedMailIndex >= 0 && selectedMailIndex < mailCache.length) {
+        readMail(selectedMailIndex);
+      }
+      break;
+    case 'r':
+      refreshMails();
+      selectedMailIndex = -1;
+      break;
+    case '/':
+      e.preventDefault();
+      document.getElementById('search-input').focus();
+      break;
+    case 's':
+      if (selectedMailIndex >= 0 && selectedMailIndex < mailCache.length) {
+        toggleStarInList(e, selectedMailIndex);
+      }
+      break;
+    case 'd':
+    case '#':
+      if (selectedMailIndex >= 0 && detailVisible) {
+        deleteMailDetail();
+      }
+      break;
+    case 'u':
+      if (selectedMailIndex >= 0 && detailVisible) {
+        toggleReadDetail();
+      }
+      break;
+    case 'Escape':
+      if (selectMode) { toggleSelectMode(); break; }
+      selectedMailIndex = -1;
+      document.querySelectorAll('.mail-row').forEach(function(r) { r.classList.remove('active'); });
+      resetMailDetail();
+      break;
+  }
+});
+
+function highlightMail(index) {
+  var rows = document.querySelectorAll('.mail-row');
+  rows.forEach(function(r, i) { r.classList.toggle('active', i === index); });
+  if (rows[index]) rows[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+window.addEventListener('resize', syncResponsiveView);
+syncResponsiveView();
+loadAccounts();
+applyLang();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,3229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#5b9a8b">
+    <title>BearerMail</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <!-- Served from this server: the page makes no requests to outside CDNs or font services. -->
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fonts/satisfy.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/quill/quill.snow.css') }}" rel="stylesheet">
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <script>
+        // Who is signed in and what they may do. The server enforces all of it; this only shapes the screens.
+        window.BM_USER = {{ bm_user|tojson }};
+        document.documentElement.classList.add(BM_USER.role === 'admin' ? 'bm-admin' : 'bm-user');
+        document.documentElement.classList.add(BM_USER.mode === 'multi' ? 'bm-multi' : 'bm-single');
+        if (BM_USER.stealth) document.documentElement.classList.add('bm-stealth');
+        if (!(BM_USER.permissions || {}).external_accounts) document.documentElement.classList.add('bm-no-external');
+        if (!(BM_USER.permissions || {}).send) document.documentElement.classList.add('bm-no-send');
+    </script>
+    <style>
+        :root {
+            --primary-color: #5b9a8b;
+            --primary-hover: #4a8a7b;
+            --bg-color: #f5f9f7;
+            --card-bg: #ffffff;
+            --text-color: #1a2421;
+            --muted-text: #4a5752;
+            --border-color: #d4e4de;
+            --navy: #4a7c9b;
+            --success-color: #5b9a8b;
+            --warning-color: #c4a35a;
+            --danger-color: #c76b6b;
+            --shadow: 0 2px 8px rgba(var(--primary-rgb),0.12);
+            --content-max-width: 1680px;
+            --radius: 10px;
+            --radius-sm: 6px;
+            --primary-rgb: 91,154,139;
+            --brand-color: #2a5f8a;
+            --soft-bg: #f5f9f7;
+            --nav-bg: rgba(245,249,247,0.95);
+            --page-gradient: linear-gradient(135deg, #ffffff 0%, #fafcfb 30%, #f7fbf9 50%, #fafcfb 70%, #ffffff 100%);
+        }
+        
+        html {
+            height: 100%;
+        }
+        
+        body {
+            background: var(--page-gradient);
+            background-attachment: fixed;
+            min-height: 100vh;
+            color: var(--text-color);
+            font-family: "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+        }
+        
+        .navbar {
+            background: var(--nav-bg) !important;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 1px 0 rgba(43,42,39,0.06);
+            backdrop-filter: blur(6px);
+            position: relative;
+            padding: 15px 0 !important;
+        }
+        
+        .navbar-brand {
+            color: var(--brand-color) !important;
+            font-weight: 400;
+            font-size: 1.8rem;
+            letter-spacing: 2px;
+            font-family: 'Satisfy', cursive;
+            margin-right: 0;
+        }
+
+        .nav-tabs-group .btn {
+            white-space: nowrap;
+        }
+        @media (max-width: 767.98px) {
+            .navbar-brand {
+                font-size: 1.35rem;
+                letter-spacing: 1px;
+            }
+            .nav-tabs-group .btn {
+                padding: 4px 8px;
+                font-size: 0.78rem;
+            }
+            .nav-tabs-group .btn .nav-tab-label {
+                display: none;
+            }
+            .nav-tabs-group .btn i {
+                margin-right: 0 !important;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+        }
+        
+        .card-header {
+            background: var(--nav-bg);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            padding: 12px 16px;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(var(--primary-rgb),0.15);
+        }
+        
+        .list-group-item {
+            border-color: var(--border-color);
+        }
+        .list-group-item.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .skeleton {
+            background: linear-gradient(90deg, #e8f0ed 25%, #f5f9f7 50%, #e8f0ed 75%);
+            background-size: 200% 100%;
+            animation: skeleton-loading 1.5s infinite;
+            border-radius: 4px;
+        }
+        @keyframes skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .skeleton-text { height: 16px; margin-bottom: 8px; }
+        .skeleton-title { height: 24px; width: 60%; margin-bottom: 12px; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--muted-text);
+        }
+        .empty-state i.d-block {
+            font-size: 3.5rem;
+            margin-bottom: 12px;
+            opacity: 0.35;
+        }
+        .empty-state p {
+            font-size: 0.95rem;
+            margin-bottom: 18px;
+        }
+        .empty-state .btn-refresh {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 20px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #666;
+            border: 1px solid #d0d0d0;
+            background: #fafafa;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .empty-state .btn-refresh:hover {
+            background: #f0f0f0;
+            border-color: #bbb;
+            color: #333;
+        }
+        .empty-state .btn-refresh:active {
+            background: #e8e8e8;
+        }
+        .empty-state .btn-refresh i {
+            font-size: 0.85rem;
+            margin-bottom: 0;
+            opacity: 0.7;
+            color: inherit;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding: 30px 20px;
+            color: var(--danger-color);
+        }
+        .error-state i {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+        
+        .mail-shell {
+            width: min(100%, var(--content-max-width));
+            margin: 0 auto;
+        }
+        @media (min-width: 992px) {
+            html, body {
+                height: 100%;
+                overflow: hidden;
+            }
+            body {
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+            .mail-shell {
+                box-sizing: border-box;
+                flex: 1 1 auto;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .mail-layout {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow: hidden;
+                align-items: stretch;
+            }
+            .mail-col {
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
+                height: 100%;
+            }
+            .mail-col > .card {
+                flex: 1 1 auto;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .mail-col > .card > .card-body {
+                flex: 1 1 auto;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .mail-left > .offcanvas-body {
+                flex: 1 1 auto;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+                padding: 0 2px 0 0;
+                overflow-y: auto;
+                overscroll-behavior: contain;
+            }
+            .mail-left .offcanvas-body > * { flex-shrink: 0; }
+            .mail-left .mail-query-card { flex: 0 0 auto; }
+            .mail-left .mail-recent-card {
+                flex: 0 0 auto;
+                max-height: 240px;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .mail-left .mail-recent-card > .card-body {
+                flex: 1 1 auto;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            .mail-list-body {
+                gap: 0.75rem;
+            }
+            .mail-recent-scroll,
+            .mail-list-scroll,
+            #mail-detail-content {
+                flex: 1 1 auto;
+                min-height: 0;
+                overflow-y: auto;
+                overflow-x: hidden;
+                overscroll-behavior: contain;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(74,124,155,0.32) transparent;
+                scrollbar-gutter: stable both-edges;
+            }
+            .mail-recent-scroll::-webkit-scrollbar,
+            .mail-list-scroll::-webkit-scrollbar,
+            #mail-detail-content::-webkit-scrollbar {
+                width: 8px;
+            }
+            .mail-recent-scroll::-webkit-scrollbar-track,
+            .mail-list-scroll::-webkit-scrollbar-track,
+            #mail-detail-content::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            .mail-recent-scroll::-webkit-scrollbar-thumb,
+            .mail-list-scroll::-webkit-scrollbar-thumb,
+            #mail-detail-content::-webkit-scrollbar-thumb {
+                background: rgba(74,124,155,0.28);
+                border-radius: 999px;
+                border: 2px solid transparent;
+                background-clip: padding-box;
+            }
+            .mail-recent-scroll::-webkit-scrollbar-thumb:hover,
+            .mail-list-scroll::-webkit-scrollbar-thumb:hover,
+            #mail-detail-content::-webkit-scrollbar-thumb:hover {
+                background: rgba(74,124,155,0.42);
+            }
+            .mail-list-scroll {
+                scrollbar-color: rgba(92,92,92,0.72) rgba(255,255,255,0.92);
+            }
+            .mail-list-scroll::-webkit-scrollbar-track {
+                background: rgba(255,255,255,0.92);
+            }
+            .mail-list-scroll::-webkit-scrollbar-thumb {
+                background: rgba(92,92,92,0.6);
+            }
+            .mail-list-scroll::-webkit-scrollbar-thumb:hover {
+                background: rgba(48,48,48,0.78);
+            }
+        }
+        
+        .mail-body {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+        .mail-body img {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .mail-item {
+            cursor: pointer;
+            transition: all 0.15s ease;
+            overflow: hidden;
+        }
+        .mail-item .mail-item-body {
+            min-width: 0;
+        }
+        .mail-item .mail-item-meta {
+            flex-shrink: 0;
+            white-space: nowrap;
+            opacity: 0.72;
+        }
+        .mail-intro {
+            opacity: 0.72;
+        }
+        .mail-item.mail-unread {
+            border-left: 3px solid var(--navy);
+            background: rgba(74,124,155,0.06);
+        }
+        .mail-item.mail-unread .mail-sender {
+            font-weight: 700;
+            color: var(--text-color);
+        }
+        .mail-item.mail-unread .mail-subject {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        .mail-item:not(.mail-unread) .mail-sender {
+            font-weight: 400;
+            color: var(--muted-text);
+        }
+        .mail-item:not(.mail-unread) .mail-subject {
+            font-weight: 400;
+            color: var(--muted-text);
+        }
+        .mail-item:hover {
+            background: rgba(var(--primary-rgb),0.08);
+        }
+        .mail-item.active {
+            background: rgba(var(--primary-rgb),0.15);
+            border-left: 3px solid var(--primary-color);
+        }
+        .mail-item.active .mail-copy {
+            background: transparent;
+            border-radius: 0;
+            box-decoration-break: slice;
+            -webkit-box-decoration-break: slice;
+            padding: 0;
+        }
+        .mail-item.active strong,
+        .mail-item.active .mail-sender,
+        .mail-item.active .mail-subject {
+            font-weight: 700;
+            color: var(--text-color);
+        }
+        .mail-item.active .mail-intro {
+            opacity: 0.9;
+            color: var(--muted-text);
+        }
+        .mail-item.active .mail-item-meta {
+            opacity: 0.88;
+        }
+        
+        .ql-container {
+            min-height: 180px;
+            font-family: "Noto Sans SC", system-ui, sans-serif;
+            font-size: 14px;
+        }
+        .ql-editor {
+            min-height: 180px;
+        }
+        .ql-toolbar.ql-snow {
+            border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+            border-color: var(--border-color);
+        }
+        .ql-container.ql-snow {
+            border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+            border-color: var(--border-color);
+        }
+        .mail-detail-back {
+            display: none;
+        }
+        /* Tablet and phone layout: see static/mobile.css */
+
+        #toast-container {
+            position: fixed;
+            left: 50%;
+            bottom: 24px;
+            transform: translateX(-50%);
+            z-index: 1090;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
+            width: min(92vw, 420px);
+        }
+        .app-toast {
+            pointer-events: auto;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            background: #2f3b38;
+            color: #fff;
+            font-size: 0.88rem;
+            box-shadow: 0 6px 20px rgba(26,36,33,0.24);
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .app-toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .app-toast.toast-error { background: var(--danger-color); }
+        .app-toast.toast-success { background: var(--primary-color); }
+        .app-toast-text {
+            flex: 1 1 auto;
+            min-width: 0;
+            word-break: break-word;
+        }
+        .app-toast-action {
+            flex: 0 0 auto;
+            background: rgba(255,255,255,0.16);
+            border: 1px solid rgba(255,255,255,0.35);
+            color: #fff;
+            border-radius: 999px;
+            padding: 2px 12px;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+        .app-toast-action:hover { background: rgba(255,255,255,0.28); }
+
+        .code-badge {
+            border: none;
+            cursor: pointer;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            letter-spacing: 0.5px;
+        }
+        .code-badge:hover { filter: brightness(1.08); }
+
+        .mail-recent-scroll {
+            align-items: flex-start;
+            align-content: flex-start;
+            max-height: 34vh;
+            overflow-y: auto;
+        }
+        .recent-pill {
+            display: inline-flex;
+            align-items: center;
+            align-self: flex-start;
+            max-width: 100%;
+            gap: 4px;
+            padding: 2px 4px 2px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 999px;
+            background: var(--soft-bg);
+            font-size: 0.78rem;
+            color: var(--muted-text);
+        }
+        .recent-pill-label {
+            cursor: pointer;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .recent-pill:hover {
+            border-color: var(--primary-color);
+            color: var(--text-color);
+        }
+        .recent-pill.recent-stale .recent-pill-label {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .recent-pill-remove {
+            border: none;
+            background: transparent;
+            color: var(--muted-text);
+            line-height: 1;
+            padding: 2px 4px;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+        .recent-pill-remove:hover { color: var(--danger-color); }
+
+        .chip-input {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+            min-height: 38px;
+            padding: 5px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--card-bg);
+            cursor: text;
+        }
+        .chip-input.is-focused {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(var(--primary-rgb),0.15);
+        }
+        .chip-input input {
+            flex: 1 1 120px;
+            min-width: 120px;
+            border: none;
+            outline: none;
+            font-size: 0.9rem;
+            padding: 2px 0;
+        }
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 100%;
+            padding: 2px 6px 2px 10px;
+            border-radius: 999px;
+            background: rgba(var(--primary-rgb),0.14);
+            border: 1px solid rgba(var(--primary-rgb),0.35);
+            font-size: 0.82rem;
+            color: var(--text-color);
+        }
+        .chip.chip-invalid {
+            background: rgba(199,107,107,0.12);
+            border-color: rgba(199,107,107,0.5);
+            color: var(--danger-color);
+        }
+        .chip-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .chip-remove {
+            border: none;
+            background: transparent;
+            color: inherit;
+            opacity: 0.6;
+            line-height: 1;
+            padding: 2px 4px;
+            cursor: pointer;
+            font-size: 0.72rem;
+        }
+        .chip-remove:hover { opacity: 1; }
+
+        .detail-meta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        .detail-meta-label {
+            flex: 0 0 auto;
+            font-weight: 600;
+        }
+        .detail-meta-value {
+            min-width: 0;
+            word-break: break-word;
+        }
+        .detail-self-address {
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+        .detail-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .mail-plaintext {
+            margin: 0;
+            padding: 12px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.82rem;
+            color: var(--text-color);
+        }
+
+        .mail-list-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+        .mail-list-toolbar #search-bar {
+            flex: 1 1 150px;
+            width: auto;
+            min-width: 130px;
+            max-width: 260px;
+        }
+        .mail-list-toolbar #batch-bar {
+            flex: 0 1 auto;
+        }
+        .bm-batch { display: flex; }
+        .mail-list-toolbar #selected-count:empty {
+            display: none;
+        }
+        @media (max-width: 991.98px) {
+            .mail-list-toolbar {
+                margin-bottom: 0.75rem;
+            }
+        }
+
+        .mail-domain-scroll {
+            max-height: 40vh;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+        }
+
+        #imap-panel, #setup-panel, .bm-app-panel { display: none; }
+        @media (min-width: 992px) {
+            #setup-panel, .bm-app-panel { max-height: calc(100vh - 160px); overflow-y: auto; overscroll-behavior: contain; padding-bottom: 1.5rem; }
+        }
+        .setup-root .nav-pills .nav-link { color: var(--text-color); }
+        .setup-root .nav-pills .nav-link.active { background: var(--primary-color); color: #fff; }
+        .setup-root .dns-value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.82rem; word-break: break-all; background: var(--soft-bg); border-radius: 6px; padding: 4px 8px; display: block; }
+        .setup-root table td, .setup-root table th { vertical-align: middle; }
+        .setup-root .step-done { color: #2e8b57; } .setup-root .step-todo { color: #b0b8b5; }
+        .setup-root .copy-btn { white-space: nowrap; } .setup-root .addr-chip { cursor: pointer; }
+        #imap-panel .card {
+            overflow: hidden;
+        }
+        #imap-panel .card-body {
+            padding: 0;
+        }
+        #imap-frame {
+            width: 100%;
+            min-height: calc(100vh - 180px);
+            border: 0;
+            background: #fff;
+        }
+    </style>
+    <link href="{{ url_for('static', filename='theme.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='mobile.css') }}" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-light sticky-top">
+        <div class="container-fluid gap-2 flex-nowrap">
+            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                <button class="btn btn-sm btn-outline-secondary d-lg-none" type="button"
+                        id="btn-left-drawer" data-bs-toggle="offcanvas" data-bs-target="#mail-left-column"
+                        aria-controls="mail-left-column" data-i18n-title="openMailboxPanel" title="Mailbox panel">
+                    <i class="bi bi-list"></i><span class="drawer-label" id="drawer-mailbox-label">Mailboxes</span>
+                </button>
+                <a class="navbar-brand d-none d-sm-inline" href="#">
+                    {% if has_logo %}{% if brand_app.light %}<img class="brand-logo logo-for-light" src="{{ brand_app.light }}" alt="BearerMail">{% endif %}{% if brand_app.dark %}<img class="brand-logo logo-for-dark" src="{{ brand_app.dark }}" alt="BearerMail">{% endif %}{% else %}<i class="bi bi-envelope me-2"></i>BearerMail{% endif %}
+                </a>
+            </div>
+
+            <div class="btn-group btn-group-sm nav-tabs-group flex-shrink-1 overflow-auto" role="group">
+                <button type="button" class="btn btn-primary" id="tab-inbox" onclick="switchTab('inbox')">
+                    <i class="bi bi-envelope-open me-1"></i><span class="nav-tab-label" data-i18n="inbox">Inbox</span><span id="unread-badge" class="badge ms-1" style="display:none;background:var(--navy);font-size:0.7em;"></span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="tab-sent" onclick="switchTab('sent')">
+                    <i class="bi bi-send me-1"></i><span class="nav-tab-label" data-i18n="sent">Sent</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="tab-trash" onclick="switchTab('trash')">
+                    <i class="bi bi-trash me-1"></i><span class="nav-tab-label" data-i18n="trash">Trash</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="tab-drive" onclick="switchTab('drive')">
+                    <i class="bi bi-hdd me-1"></i><span class="nav-tab-label">Drive</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="tab-calendar" onclick="switchTab('calendar')">
+                    <i class="bi bi-calendar3 me-1"></i><span class="nav-tab-label">Calendar</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary bm-need-external" id="tab-imap" onclick="switchTab('imap')" title="External accounts (Gmail, Outlook...)">
+                    <i class="bi bi-diagram-3 me-1"></i><span class="nav-tab-label">External</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="tab-setup" onclick="switchTab('setup')">
+                    <i class="bi bi-sliders me-1"></i><span class="nav-tab-label">Setup</span>
+                </button>
+            </div>
+
+            <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                <span class="bm-me-chip d-none d-lg-inline-flex" id="me-chip" title="Signed in as"></span>
+                <button class="btn btn-sm btn-outline-secondary d-none d-lg-inline-flex align-items-center gap-1 bm-settings-btn" onclick="openSettingsPage()" id="btn-settings" title="Settings" aria-label="Settings">
+                    <i class="bi bi-gear"></i><span class="d-none d-xl-inline">Settings</span>
+                </button>
+                <form method="post" action="{{ url_for('logout') }}" class="m-0 d-none d-lg-block">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Log out" aria-label="Log out"><i class="bi bi-box-arrow-right"></i></button>
+                </form>
+                <div class="dropdown d-lg-none">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Menu" title="Menu"><i class="bi bi-three-dots-vertical"></i></button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><button class="dropdown-item" type="button" onclick="refreshCurrentTab()"><i class="bi bi-arrow-clockwise me-2"></i>Refresh</button></li>
+                        <li><button class="dropdown-item" type="button" onclick="switchTab('trash')"><i class="bi bi-trash me-2"></i>Trash</button></li>
+                        <li class="bm-need-external"><button class="dropdown-item" type="button" onclick="switchTab('imap')"><i class="bi bi-diagram-3 me-2"></i>External accounts</button></li>
+                        <li><button class="dropdown-item" type="button" onclick="openSettingsPage()"><i class="bi bi-gear me-2"></i>Settings</button></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><form method="post" action="{{ url_for('logout') }}" class="m-0"><button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right me-2"></i>Sign out</button></form></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <div class="bm-stealth-bar" id="stealth-bar" role="status">
+        <i class="bi bi-incognito"></i>
+        <span class="bm-stealth-text">Stealth view of <b id="stealth-who"></b>. Read-only: nothing is marked read or changed, and they are not notified.</span>
+        <button type="button" class="btn btn-sm btn-light" onclick="endStealth()"><i class="bi bi-arrow-return-left me-1"></i>Return to my account</button>
+    </div>
+
+    <!-- Phone and tablet: tabs at the bottom, within thumb reach -->
+    <nav class="bm-bottom-nav" aria-label="Sections">
+        <button type="button" id="bnav-inbox" class="active" onclick="switchTab('inbox')"><i class="bi bi-inbox"></i><span>Inbox</span><span id="unread-badge-bottom" class="badge rounded-pill" style="display:none;background:var(--navy);"></span></button>
+        <button type="button" id="bnav-sent" onclick="switchTab('sent')"><i class="bi bi-send"></i><span>Sent</span></button>
+        <button type="button" id="bnav-drive" onclick="switchTab('drive')"><i class="bi bi-hdd"></i><span>Drive</span></button>
+        <button type="button" id="bnav-calendar" onclick="switchTab('calendar')"><i class="bi bi-calendar3"></i><span>Calendar</span></button>
+        <button type="button" id="bnav-setup" onclick="switchTab('setup')"><i class="bi bi-sliders"></i><span>Setup</span></button>
+    </nav>
+    <button type="button" class="bm-fab" onclick="openCompose()" aria-label="Compose" title="Compose"><i class="bi bi-pencil-square"></i></button>
+
+    <div class="container-fluid py-4 px-4 mail-shell">
+        <div class="row g-4 mail-layout mobile-view-list" id="mail-layout">
+            <div class="col-12 col-lg-3 mail-col mail-left offcanvas-lg offcanvas-start" tabindex="-1"
+                 id="mail-left-column" aria-labelledby="mailLeftLabel">
+                <div class="offcanvas-header">
+                    <h5 class="offcanvas-title" id="mailLeftLabel" data-i18n="queryInbox">Query Inbox</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#mail-left-column" aria-label="Close"></button>
+                </div>
+                <div class="offcanvas-body flex-column gap-3">
+                    <button type="button" class="btn btn-primary bm-compose-big d-none d-lg-flex" onclick="openCompose()">
+                        <i class="bi bi-pencil-square"></i><span data-i18n="compose">Compose</span>
+                    </button>
+                    <div class="card mail-query-card bm-admin-only bm-single-only">
+                        <div class="card-header">
+                            <i class="bi bi-search me-2"></i><span data-i18n="queryInbox">Query Inbox</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label" data-i18n="selectDomain">Select Domain</label>
+                                <select class="form-select" id="inbox-domain">
+                                    <option value="" data-i18n="loading">Loading...</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label" data-i18n="emailPrefix">Email Prefix</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="inbox-prefix" data-i18n-ph="enterPrefix" placeholder="Enter prefix" onkeydown="if(event.key==='Enter') queryInbox()">
+                                    <span class="input-group-text" id="inbox-domain-display">@yourdomain.com</span>
+                                </div>
+                                <small class="text-muted" data-i18n="prefixExample">e.g. openai001</small>
+                            </div>
+                            <button class="btn btn-primary w-100" onclick="queryInbox()" id="btn-query-inbox">
+                                <i class="bi bi-search me-1"></i><span data-i18n="query">Query</span>
+                            </button>
+                            <div id="inbox-error" class="alert alert-danger mt-3" style="display:none;"></div>
+                            <div class="small text-muted mt-3" data-i18n="domainTip">Enter prefix to query. Mailbox auto-created if not exists.</div>
+                        </div>
+                    </div>
+
+                    <div class="card" id="mine-card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-inboxes me-2"></i>Your addresses</span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="switchTab('setup'); BearerSetup.open(BM_USER.role === 'admin' ? 'mailboxes' : 'aliases')" title="Manage mailboxes and aliases"><i class="bi bi-plus-lg"></i></button>
+                        </div>
+                        <div class="card-body"><div id="mine-list" class="small text-muted">Loading...</div></div>
+                    </div>
+
+                    <div class="card mail-recent-card" id="recent-card" style="display:none;">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-clock-history me-2"></i><span data-i18n="recentMailboxes">Recent</span></span>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearRecentMailboxes()" data-i18n-title="clearRecent" title="Clear recent mailboxes">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="recent-list" class="mail-recent-scroll d-flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
+
+                    <div class="card bm-storage-card d-none" id="storage-card">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between align-items-center small mb-1">
+                                <span><i class="bi bi-hdd-stack me-1"></i>Storage</span>
+                                <span id="storage-text" class="text-muted"></span>
+                            </div>
+                            <div class="progress" role="progressbar" aria-label="Storage used" style="height:8px"><div class="progress-bar" id="storage-bar" style="width:0%"></div></div>
+                            <div class="small text-muted mt-1" id="storage-detail"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-5 col-lg-4 mail-col" id="mail-list-column">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="text-truncate me-2" id="mail-list-title">
+                            <i class="bi bi-envelope-open me-2"></i><span id="mail-list-title-text" data-i18n="inbox">Inbox</span>
+                            <small class="text-muted ms-1" id="mail-list-mailbox"></small>
+                        </span>
+                        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                            <div class="form-check form-switch mb-0" data-i18n-title="autoRefreshTitle" title="Auto-refresh every 15s">
+                                <input class="form-check-input" type="checkbox" id="auto-refresh-toggle" checked onchange="toggleAutoRefresh(this.checked)">
+                                <label class="form-check-label small" for="auto-refresh-toggle" data-i18n="auto">Auto</label>
+                            </div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="refreshCurrentTab()" id="btn-refresh-mail" disabled>
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body mail-list-body">
+                        <div class="mail-list-toolbar">
+                            <div class="input-group input-group-sm" id="search-bar" style="display:none;">
+                                <input type="text" class="form-control" id="search-input" data-i18n-ph="searchPlaceholder" placeholder="Search mail..." data-i18n-title="searchHint" title="Search sender / subject / content" onkeydown="if(event.key==='Enter') searchMail()">
+                                <button class="btn btn-outline-secondary" onclick="searchMail()" id="btn-search">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="clearSearch()" data-i18n-title="clearSearchTitle" title="Clear search">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                            <div id="batch-bar" class="bm-batch align-items-center gap-2 flex-wrap d-none">
+                                <div class="form-check mb-0">
+                                    <input class="form-check-input" type="checkbox" id="select-all-checkbox" onchange="toggleSelectAll(this.checked)">
+                                    <label class="form-check-label small" for="select-all-checkbox" data-i18n="selectAll">All</label>
+                                </div>
+                                <span class="small text-muted" id="selected-count"></span>
+                                <span id="batch-actions" class="d-flex flex-wrap gap-2"></span>
+                            </div>
+                        </div>
+                        <div id="mail-list" class="mail-list-scroll">
+                            <div class="mailbox-chooser">
+                                <i class="bi bi-inboxes" style="font-size:2.2rem;opacity:.4"></i>
+                                <div class="mt-2"><span data-i18n="queryHint">Pick a mailbox or alias</span></div>
+                                <div class="chooser-list" id="mailbox-chooser"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-12 col-md-7 col-lg-5 mail-col" id="mail-detail-column">
+                <div class="card h-100" id="mail-detail-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary mail-detail-back" onclick="showMailListView()">
+                            <i class="bi bi-chevron-left"></i><span data-i18n="backToList">Back</span>
+                        </button>
+                        <span class="text-truncate">
+                            <i class="bi bi-file-text me-2"></i><span data-i18n="mailDetail">Mail Detail</span>
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div id="mail-detail-content">
+                            <div class="text-center text-muted py-5">
+                                <i class="bi bi-envelope-paper" style="font-size:3rem;opacity:0.3;"></i>
+                                <p class="mt-3" data-i18n="selectMailHint">Select an email to view details</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12" id="imap-panel">
+                <div class="card">
+                    <div class="card-body">
+                        <iframe id="imap-frame" title="External accounts (Gmail, Outlook, ...)" loading="lazy" referrerpolicy="no-referrer"></iframe>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12" id="setup-panel"><div id="setup-root" class="setup-root"></div></div>
+            <div class="col-12 bm-app-panel" id="drive-panel"><div id="drive-root"></div></div>
+            <div class="col-12 bm-app-panel" id="calendar-panel"><div id="calendar-root"></div></div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="composeModal" tabindex="-1" aria-labelledby="composeModalLabel" aria-hidden="true"
+         data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-lg modal-fullscreen-md-down modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header" style="background:var(--nav-bg);border-bottom:1px solid var(--border-color);">
+                    <h5 class="modal-title" id="composeModalLabel"><i class="bi bi-pencil-square me-2"></i><span data-i18n="composeEmail">Compose Email</span></h5>
+                    <button type="button" class="btn-close" onclick="tryCloseCompose()" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="compose-alert" class="alert" style="display:none;" role="alert"></div>
+                    <div id="compose-draft-bar" class="alert alert-warning d-flex align-items-center justify-content-between gap-2 py-2 d-none">
+                        <span class="small" data-i18n="draftFound">Unsent draft found</span>
+                        <span class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-primary" onclick="restoreDraft()" data-i18n="restoreDraft">Restore</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="discardDraft()" data-i18n="discardDraft">Discard</button>
+                        </span>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label" for="compose-from-pick">Send as</label>
+                        <select class="form-select" id="compose-from-pick" onchange="BearerSetup.pickSender(this.value)">
+                            <option value="">Choose a mailbox or alias...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" data-i18n="from">From</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="compose-from-prefix" data-i18n-ph="prefix" placeholder="Prefix">
+                            <span class="input-group-text">@</span>
+                            <select class="form-select" id="compose-from-domain" style="max-width:200px;">
+                                <option value="" data-i18n="loading">Loading...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="compose-to-input" data-i18n="to">To</label>
+                        <div class="chip-input" id="compose-to-chips" onclick="focusRecipientInput(event)">
+                            <input type="text" id="compose-to-input" data-i18n-ph="toPlaceholder" placeholder="Recipient email, separate with commas">
+                        </div>
+                        <small class="text-muted" data-i18n="toHint">Press Enter or comma to confirm; invalid addresses turn red</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" data-i18n="subject">Subject</label>
+                        <input type="text" class="form-control" id="compose-subject" data-i18n-ph="subjectPlaceholder" placeholder="Email subject">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" data-i18n="body">Body</label>
+                        <div id="compose-editor" style="min-height:200px;"></div>
+                    </div>
+                    <div class="mb-1">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('compose-files').click()">
+                                <i class="bi bi-paperclip me-1"></i><span data-i18n="addAttachment">Add attachment</span>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="BearerDrive.pickForCompose()">
+                                <i class="bi bi-hdd me-1"></i>From Drive
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="BearerCalendar.pickForCompose()">
+                                <i class="bi bi-calendar-plus me-1"></i>Invite
+                            </button>
+                            <small class="text-muted" id="attachment-hint"></small>
+                        </div>
+                        <input type="file" id="compose-files" multiple style="display:none;" onchange="onAttachmentsPicked(this)">
+                        <div id="compose-attachments" class="d-flex flex-wrap gap-2"></div>
+                        <div id="compose-extras" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" onclick="tryCloseCompose()" data-i18n="cancel">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="btn-send-email" onclick="sendEmail()">
+                        <i class="bi bi-send me-1"></i><span data-i18n="send">Send</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header" style="background:var(--nav-bg);border-bottom:1px solid var(--border-color);">
+                    <h5 class="modal-title" id="confirmModalLabel"><i class="bi bi-exclamation-triangle me-2 text-warning"></i><span id="confirm-title"></span></h5>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0" id="confirm-message" style="white-space:pre-line;word-break:break-word;"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="confirm-cancel" data-i18n="cancel">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirm-ok"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="bmDialog" tabindex="-1" aria-labelledby="bmDialogTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down" id="bmDialogBox">
+            <div class="modal-content">
+                <div class="modal-header" style="background:var(--nav-bg);border-bottom:1px solid var(--border-color);">
+                    <h5 class="modal-title text-truncate" id="bmDialogTitle"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="bmDialogBody"></div>
+                <div class="modal-footer" id="bmDialogFooter"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='vendor/quill/quill.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='mail-privacy.js') }}"></script>
+    <script src="{{ url_for('static', filename='security-ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='users-ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='keys-ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='drive-ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='calendar-ui.js') }}"></script>
+    <script src="{{ url_for('static', filename='setup.js') }}"></script>
+    <script src="{{ url_for('static', filename='notify.js') }}"></script>
+    <script>BearerNotify.init({ getEmail: () => currentEmail });</script>
+    <script>
+        // ---- i18n ----
+        const LANGS = {
+            en: {
+                compose: 'Compose',
+                queryInbox: 'Open Inbox',
+                selectDomain: 'Domain',
+                loading: 'Loading...',
+                emailPrefix: 'Mailbox or alias',
+                enterPrefix: 'e.g. you',
+                prefixExample: 'e.g. you, or an alias like shop-x7k2',
+                query: 'Open',
+                domainMgmt: 'Quick domain list',
+                enterDomain: 'Enter domain, e.g. example.com',
+                domainTip: 'New here? Create mailboxes and disposable aliases under Setup.',
+                inbox: 'Inbox',
+                sent: 'Sent',
+                trash: 'Trash',
+                attachments: 'Attachments',
+                download: 'Download',
+                restore: 'Restore',
+                permanentDelete: 'Delete forever',
+                noTrashMail: 'Trash is empty',
+                attachmentUnavailable: 'Attachment download API unavailable',
+                confirmRestore: 'Restore this email?',
+                confirmPermanentDelete: 'Permanently delete this email? This cannot be undone.',
+                auto: 'Auto',
+                searchPlaceholder: 'Search mail...',
+                searchHint: 'Search sender / subject / content',
+                clearSearchTitle: 'Clear search',
+                selectAll: 'All',
+                delete: 'Delete',
+                markRead: 'Read',
+                queryHint: 'Pick a mailbox or alias',
+                mailDetail: 'Mail Detail',
+                selectMailHint: 'Select an email to view details',
+                composeEmail: 'Compose Email',
+                from: 'From',
+                prefix: 'Prefix',
+                to: 'To',
+                toPlaceholder: 'Recipient email, separate with commas',
+                subject: 'Subject',
+                subjectPlaceholder: 'Email subject',
+                body: 'Body',
+                cancel: 'Cancel',
+                send: 'Send',
+                refresh: 'Refresh',
+                reply: 'Reply',
+                replyEmail: 'Reply',
+                noSubject: '(No subject)',
+                unknownSender: 'Unknown sender',
+                inboxEmpty: 'Inbox is empty',
+                noSentMail: 'No sent emails',
+                noDomains: 'No domains',
+                noMatch: 'No matching emails found',
+                loadMore: 'Load more',
+                querying: 'Opening...',
+                searching: 'Searching...',
+                sending: 'Sending...',
+                sentSuccess: 'Email sent successfully!',
+                sendFailed: 'Send failed',
+                loadFailed: 'Load failed',
+                queryFailed: 'Could not open inbox',
+                searchFailed: 'Search failed',
+                deleteFailed: 'Delete failed',
+                networkError: 'Network error',
+                enterDomainErr: 'Please enter a domain',
+                domainInvalid: 'Invalid domain format',
+                enterPrefixErr: 'Enter the mailbox or alias name',
+                fillFrom: 'Please fill in sender',
+                fillTo: 'Please fill in recipient',
+                fillSubject: 'Please fill in subject',
+                fillBody: 'Please fill in body',
+                selected: '{n} selected',
+                confirmDeleteN: 'Delete {n} selected emails?',
+                confirmDelete1: 'Delete this email?',
+                confirmDisableDomain: 'Disable domain "{d}"? Emails to this domain will no longer be received.',
+                emptyContent: 'Email content is empty',
+                queryFirst: 'Open a mailbox first',
+                editorPlaceholder: 'Enter email body...',
+                time: 'Time',
+                autoRefreshTitle: 'Auto-refresh every 15s',
+                disableDomain: 'Disable this domain',
+                verifyCode: 'Code',
+                settings: 'Settings',
+                openMailboxPanel: 'Mailbox panel',
+                backToList: 'Back',
+                recentMailboxes: 'Recent',
+                clearRecent: 'Clear recent mailboxes',
+                recentStale: 'Domain disabled',
+                copied: 'Copied {v}',
+                copyFailed: 'Copy failed, select it manually',
+                copyCode: 'Click to copy code',
+                undo: 'Undo',
+                mailDeleted: 'Email deleted',
+                mailsDeleted: '{n} emails deleted',
+                mailRestored: 'Email restored',
+                undoFailed: 'Undo failed, restore it from Trash',
+                markedRead: 'Marked as read',
+                cc: 'Cc',
+                replyAll: 'Reply all',
+                forward: 'Forward',
+                forwardEmail: 'Forward',
+                downloadEml: 'Download .eml',
+                viewPlain: 'Plain text',
+                viewHtml: 'Rendered',
+                emlUnavailable: 'Upstream provides no raw source endpoint',
+                clearSearchBtn: 'Clear search',
+                draftFound: 'Unsent draft found',
+                restoreDraft: 'Restore',
+                discardDraft: 'Discard',
+                discardTitle: 'Discard draft?',
+                discardMsg: 'Closing now will discard what you are editing.',
+                discardOk: 'Discard and close',
+                toHint: 'Press Enter or comma to confirm; invalid addresses turn red',
+                addAttachment: 'Add attachment',
+                attachmentSummary: '{n} files · {size}',
+                attachmentTooLarge: 'Attachment {name} exceeds the {max}MB limit',
+                attachmentTotalTooLarge: 'Attachments exceed the {max}MB total limit',
+                attachmentReadFailed: 'Failed to read attachment: {name}',
+                invalidRecipient: 'Fix the highlighted recipient addresses',
+                confirmTitle: 'Please confirm',
+                permanentDeleteOk: 'Delete forever',
+                disableDomainOk: 'Disable',
+                noRecent: 'No history',
+            }
+        };
+
+        const currentLang = 'en';
+
+        function t(key, params) {
+            let s = LANGS.en[key] || key;
+            if (params) Object.keys(params).forEach(k => { s = s.replace(`{${k}}`, params[k]); });
+            return s;
+        }
+
+        function applyLang() {
+            document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+            document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+            document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+            document.documentElement.lang = 'en';
+        }
+
+        let currentEmail = '';
+        let currentMessages = [];
+        let currentSentMessages = [];
+        let currentTrashMessages = [];
+        let activeDomains = [];
+        let currentOffset = 0;
+        let currentTotal = 0;
+        let currentSentTotal = 0;
+        let currentTrashTotal = 0;
+        let imapLoaded = false;
+        let isSearchMode = false;
+        let _mailBodyResizeObserver = null;
+        const PAGE_SIZE = 30;
+        // Recent mailboxes and the unsent draft are kept per account, so people who share a browser never
+        // see each other's addresses. A stealth view keeps nothing at all.
+        const _ACCOUNT_SLOT = (window.BM_USER && BM_USER.mode === 'multi') ? (BM_USER.address || 'emergency-admin') : 'single';
+        const _NO_TRACE = !!(window.BM_USER && BM_USER.stealth);
+        const RECENT_KEY = 'bearermail-recent:' + _ACCOUNT_SLOT;
+        const DRAFT_KEY = 'bearermail-draft:' + _ACCOUNT_SLOT;
+        (function migrateSharedKeys() {
+            try {
+                ['bearermail-recent', 'bearermail-draft'].forEach((old) => {
+                    const v = localStorage.getItem(old);
+                    if (v === null) return;
+                    // Single-password mode keeps its list; with personal accounts the old shared list is dropped.
+                    const target = old === 'bearermail-recent' ? RECENT_KEY : DRAFT_KEY;
+                    if (_ACCOUNT_SLOT === 'single' && localStorage.getItem(target) === null) localStorage.setItem(target, v);
+                    localStorage.removeItem(old);
+                });
+            } catch (e) { /* storage unavailable */ }
+        })();
+        const RECENT_MAX = 8;
+        const MAX_ATTACHMENT_MB = 5;
+        const MAX_ATTACHMENT_TOTAL_MB = 10;
+
+        function showToast(message, options = {}) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'app-toast' + (options.type ? ` toast-${options.type}` : '');
+
+            const text = document.createElement('span');
+            text.className = 'app-toast-text';
+            text.textContent = message;
+            toast.appendChild(text);
+
+            let dismissed = false;
+            const dismiss = () => {
+                if (dismissed) return;
+                dismissed = true;
+                clearTimeout(timer);
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 220);
+            };
+
+            if (options.actionLabel && typeof options.onAction === 'function') {
+                const action = document.createElement('button');
+                action.type = 'button';
+                action.className = 'app-toast-action';
+                action.textContent = options.actionLabel;
+                action.onclick = () => { dismiss(); options.onAction(); };
+                toast.appendChild(action);
+            }
+
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.add('show'));
+            const timer = setTimeout(dismiss, options.duration || (options.actionLabel ? 6000 : 3200));
+            return dismiss;
+        }
+
+        function toastError(message) {
+            showToast(message, { type: 'error' });
+        }
+
+        let confirmModal = null;
+
+        function showConfirm({ title, message, okLabel, onConfirm }) {
+            if (!confirmModal) {
+                confirmModal = new bootstrap.Modal(document.getElementById('confirmModal'));
+            }
+            document.getElementById('confirm-title').textContent = title || t('confirmTitle');
+            document.getElementById('confirm-message').textContent = message || '';
+            const okBtn = document.getElementById('confirm-ok');
+            okBtn.textContent = okLabel || t('delete');
+            okBtn.onclick = () => {
+                confirmModal.hide();
+                onConfirm();
+            };
+            document.getElementById('confirm-cancel').textContent = t('cancel');
+            confirmModal.show();
+        }
+
+        async function copyText(text, event) {
+            if (event) event.stopPropagation();
+            try {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    const ok = document.execCommand('copy');
+                    ta.remove();
+                    if (!ok) throw new Error('execCommand failed');
+                }
+                showToast(t('copied', { v: text }), { type: 'success', duration: 1800 });
+            } catch (e) {
+                toastError(t('copyFailed'));
+            }
+        }
+
+        // On phones the list and the message are separate screens. Opening a message adds a history
+        // entry, so the phone's Back gesture returns to the list instead of leaving the app.
+        let _detailHistory = false;
+        const _isPhone = () => window.matchMedia('(max-width: 767.98px)').matches;
+
+        function showMailDetailView() {
+            const layout = document.getElementById('mail-layout');
+            layout.classList.remove('mobile-view-list');
+            layout.classList.add('mobile-view-detail');
+            if (_isPhone()) {
+                document.body.classList.add('detail-open');
+                window.scrollTo(0, 0);
+                if (!_detailHistory) {
+                    try { history.pushState({ bmDetail: true }, ''); _detailHistory = true; } catch (e) { /* ignore */ }
+                }
+            }
+        }
+
+        function showMailListView(fromHistory = false) {
+            const layout = document.getElementById('mail-layout');
+            layout.classList.remove('mobile-view-detail');
+            layout.classList.add('mobile-view-list');
+            document.body.classList.remove('detail-open');
+            if (_detailHistory && !fromHistory) {
+                _detailHistory = false;
+                try { history.back(); } catch (e) { /* ignore */ }
+            }
+            _detailHistory = false;
+        }
+
+        window.addEventListener('popstate', () => {
+            if (_detailHistory) { _detailHistory = false; showMailListView(true); }
+        });
+
+        function loadRecentMailboxes() {
+            if (_NO_TRACE) return [];
+            try {
+                const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+                return Array.isArray(raw) ? raw.filter(x => typeof x === 'string') : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveRecentMailboxes(list) {
+            if (_NO_TRACE) return;
+            try {
+                localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
+            } catch (e) {}
+        }
+
+        function rememberMailbox(email) {
+            if (!email) return;
+            const list = loadRecentMailboxes().filter(x => x.toLowerCase() !== email.toLowerCase());
+            list.unshift(email);
+            saveRecentMailboxes(list);
+            renderRecentMailboxes();
+        }
+
+        function removeRecentMailbox(email) {
+            saveRecentMailboxes(loadRecentMailboxes().filter(x => x !== email));
+            renderRecentMailboxes();
+        }
+
+        function clearRecentMailboxes() {
+            saveRecentMailboxes([]);
+            renderRecentMailboxes();
+        }
+
+        function renderRecentMailboxes() {
+            const card = document.getElementById('recent-card');
+            const list = document.getElementById('recent-list');
+            const items = loadRecentMailboxes();
+            if (items.length === 0) {
+                card.style.display = 'none';
+                list.innerHTML = '';
+                return;
+            }
+            card.style.display = '';
+            list.innerHTML = items.map(email => {
+                const domain = email.split('@')[1] || '';
+                const stale = activeDomains.length > 0 && !activeDomains.includes(domain);
+                const safe = _escapeHtml(email);
+                const encoded = encodeURIComponent(email);
+                return `
+                    <span class="recent-pill${stale ? ' recent-stale' : ''}" title="${stale ? t('recentStale') : safe}">
+                        <span class="recent-pill-label" ${stale ? '' : `onclick="useRecentMailbox(decodeURIComponent('${encoded}'))"`}>${safe}</span>
+                        <button type="button" class="recent-pill-remove" onclick="removeRecentMailbox(decodeURIComponent('${encoded}'))" aria-label="remove">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </span>`;
+            }).join('');
+        }
+
+        function useRecentMailbox(email) {
+            const [prefix, domain] = email.split('@');
+            const domainSelect = document.getElementById('inbox-domain');
+            if (activeDomains.includes(domain)) {
+                domainSelect.value = domain;
+                document.getElementById('inbox-domain-display').textContent = '@' + domain;
+            }
+            document.getElementById('inbox-prefix').value = prefix || '';
+            if (currentTab !== 'inbox') {
+                switchTab('inbox');
+            }
+            closeLeftDrawer();
+            queryInbox();
+        }
+
+        function closeLeftDrawer() {
+            const el = document.getElementById('mail-left-column');
+            const instance = bootstrap.Offcanvas.getInstance(el);
+            if (instance) instance.hide();
+        }
+
+        function _escapeHtml(str) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(str));
+            return div.innerHTML;
+        }
+
+        function _computeBodyScale(available, natural) {
+            if (!available || !natural || natural <= available + 1) return 1;
+            return Math.max(available / (natural + 12), 0.4);
+        }
+
+        function _renderMailBodyIframe(iframe, mailContent, opts = {}) {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            iframe.setAttribute('scrolling', 'no');
+            iframe.style.overflow = 'hidden';
+            const extraCss = window.BearerPrivacy ? BearerPrivacy.FRAME_CSS : '';
+
+            iframeDoc.open();
+            iframeDoc.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="color-scheme" content="light"><meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank"><style>:root{color-scheme:light;}html,body{margin:0;padding:0;background:transparent;box-sizing:border-box;}body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.45;color:#1a2421;padding:12px;word-break:break-word;overflow-wrap:anywhere;}img{max-width:100%;height:auto;}table{max-width:100%!important;}a{color:#4a7c9b;}${extraCss}</style></head><body>${mailContent}</body></html>`);
+            iframeDoc.close();
+
+            if (window.BearerPrivacy) {
+                BearerPrivacy.wireLinks(iframeDoc, showConfirm);
+                if (opts.showImages) BearerPrivacy.loadImages(iframeDoc);
+            } else {
+                iframeDoc.querySelectorAll('a[href]').forEach(a => {
+                    a.setAttribute('target', '_blank');
+                    a.setAttribute('rel', 'noopener noreferrer');
+                });
+            }
+
+            const fitBody = () => {
+                try {
+                    const body = iframeDoc.body;
+                    const doc = iframeDoc.documentElement;
+                    if (!body) return;
+
+                    body.style.transform = 'none';
+                    body.style.width = 'auto';
+                    const available = iframe.clientWidth || iframe.offsetWidth || 0;
+                    const natural = Math.max(body.scrollWidth, doc ? doc.scrollWidth : 0);
+
+                    const scale = _computeBodyScale(available, natural);
+                    if (scale < 1) {
+                        body.style.width = natural + 'px';
+                        body.style.transform = `scale(${scale})`;
+                    }
+
+                    const height = Math.max(
+                        body.scrollHeight,
+                        body.offsetHeight,
+                        doc ? doc.scrollHeight : 0,
+                        doc ? doc.offsetHeight : 0
+                    );
+                    iframe.style.height = Math.ceil(height * scale + 20) + 'px';
+                } catch (e) {}
+            };
+
+            iframeDoc.querySelectorAll('img').forEach(img => {
+                if (!img.complete) {
+                    img.addEventListener('load', fitBody);
+                    img.addEventListener('error', fitBody);
+                }
+            });
+
+            fitBody();
+            setTimeout(fitBody, 200);
+            setTimeout(fitBody, 800);
+
+            if (_mailBodyResizeObserver) _mailBodyResizeObserver.disconnect();
+            if (window.ResizeObserver && iframe.parentElement) {
+                let lastWidth = iframe.clientWidth;
+                _mailBodyResizeObserver = new ResizeObserver(() => {
+                    const width = iframe.clientWidth;
+                    if (Math.abs(width - lastWidth) < 1) return;
+                    lastWidth = width;
+                    fitBody();
+                });
+                _mailBodyResizeObserver.observe(iframe.parentElement);
+            }
+        }
+
+        function _updateUnreadBadge() {
+            const unreadCount = currentMessages.filter(m => !m.seen).length;
+            ['unread-badge', 'unread-badge-bottom'].forEach(id => {
+                const badge = document.getElementById(id);
+                if (!badge) return;
+                if (unreadCount > 0) {
+                    badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        }
+
+        function _attachmentId(att, index) {
+            return encodeURIComponent(String(att.id || (att.index ?? index)));
+        }
+
+        function _formatSize(bytes) {
+            const n = Number(bytes) || 0;
+            if (!n) return '';
+            const fmt = (v) => (v >= 100 ? v.toFixed(0) : v.toFixed(1)).replace(/\.0$/, '');
+            if (n < 1024) return n + ' bytes';
+            if (n >= 1024 ** 3) return fmt(n / 1024 ** 3) + ' GB';
+            return n >= 1024 * 1024 ? fmt(n / 1024 / 1024) + ' MB' : fmt(n / 1024) + ' KB';
+        }
+
+        function _renderAttachments(messageId, attachments) {
+            if (!attachments || attachments.length === 0) return '';
+            return `
+                <div class="mb-3">
+                    <strong><i class="bi bi-paperclip me-1"></i>${t('attachments')}:</strong>
+                    <div class="mt-2 d-flex flex-wrap gap-2">
+                        ${attachments.map((att, index) => {
+                            const filename = att.filename || `attachment_${index}`;
+                            const size = _formatSize(att.size);
+                            const url = `/api/inbox/attachment/${encodeURIComponent(messageId)}/${_attachmentId(att, index)}?email=${encodeURIComponent(currentEmail)}&filename=${encodeURIComponent(filename)}`;
+                            return `<a class="btn btn-sm btn-outline-secondary" href="${url}" download title="${t('download')}"><i class="bi bi-download me-1"></i>${_escapeHtml(filename)}${size ? ` <span class="text-muted">(${size})</span>` : ''}</a>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+        }
+
+        document.getElementById('inbox-domain').addEventListener('change', function() {
+            document.getElementById('inbox-domain-display').textContent = '@' + this.value;
+        });
+
+        function openSettingsPage() {
+            switchTab('setup');
+            if (window.BearerSetup) BearerSetup.open();
+        }
+
+        async function endStealth() {
+            try { await fetch('/api/stealth/end', { method: 'POST' }); } catch (e) { /* reload anyway */ }
+            window.location.href = '/';
+        }
+
+        async function startStealth(address) {
+            showConfirm({
+                title: 'Stealth sign-in',
+                message: `Open ${address} read-only? Nothing will be marked read or changed and they will not be told, but it is recorded in the admins' Security log.`,
+                okLabel: 'Open',
+                onConfirm: async () => {
+                    try {
+                        const r = await fetch('/api/users/' + encodeURIComponent(address) + '/stealth', { method: 'POST' });
+                        const j = await r.json();
+                        if (!r.ok || j.success === false) throw new Error(j.message || 'Could not open that mailbox');
+                        window.location.href = '/';
+                    } catch (e) { toastError(e.message); }
+                },
+            });
+        }
+
+        async function loadDomains() {
+            const domainSelect = document.getElementById('inbox-domain');
+            try {
+                const resp = await fetch('/api/domains');
+                const data = await resp.json();
+                if (!data.success) return;
+                const domains = (data.domains || []).filter(d => d.is_active);
+                activeDomains = domains.map(d => d.domain);
+
+                const prevSelected = domainSelect.value;
+                domainSelect.innerHTML = activeDomains.map(d =>
+                    `<option value="${_escapeHtml(d)}">${_escapeHtml(d)}</option>`
+                ).join('');
+                if (activeDomains.includes(prevSelected)) {
+                    domainSelect.value = prevSelected;
+                }
+                if (domainSelect.value) {
+                    document.getElementById('inbox-domain-display').textContent = '@' + domainSelect.value;
+                }
+            } catch (e) {
+                /* the domain list is refreshed on the next load */
+            } finally {
+                renderRecentMailboxes();
+            }
+        }
+
+        // Reopen the mailbox you used last, so the app starts on your inbox.
+        function _autoOpenLastMailbox() {
+            if (currentEmail) return;
+            const own = window.BM_USER && BM_USER.mode === 'multi' ? (BM_USER.addresses || []) : null;
+            let last = loadRecentMailboxes().find(a => !own || own.includes(a.toLowerCase()));
+            if (!last && own && BM_USER.address) last = BM_USER.address;  // a personal account opens its own inbox
+            if (!last) return;
+            const domain = last.split('@')[1];
+            if (activeDomains.includes(domain)) useRecentMailbox(last);
+        }
+
+        function _renderMeChip() {
+            const chip = document.getElementById('me-chip');
+            if (window.BM_USER && BM_USER.stealth) {
+                const bar = document.getElementById('stealth-who');
+                if (bar) bar.textContent = BM_USER.address;
+            }
+            if (!chip || !window.BM_USER || BM_USER.mode !== 'multi') return;
+            const who = BM_USER.address || 'Emergency admin';
+            chip.innerHTML = `<i class="bi bi-person-circle"></i><span class="text-truncate">${_escapeHtml(who)}</span>${BM_USER.role === 'admin' ? '<span class="badge text-bg-secondary">admin</span>' : ''}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.body.dataset.activeTab = 'inbox';
+            applyLang();
+            _renderMeChip();
+            renderRecentMailboxes();
+            loadDomains().then(_autoOpenLastMailbox);
+            _initRecipientInput();
+            document.getElementById('compose-subject').addEventListener('input', saveDraft);
+            document.getElementById('compose-from-prefix').addEventListener('input', saveDraft);
+        });
+        window.addEventListener('message', (event) => {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type === 'mail-viewer-switch-tab' && event.data.tab) {
+                switchTab(event.data.tab);
+            }
+        });
+
+        function ensureImapLoaded() {
+            const frame = document.getElementById('imap-frame');
+            if (!imapLoaded) {
+                frame.src = '/imap/?embedded=1';
+                imapLoaded = true;
+            }
+        }
+
+        function reloadImapFrame() {
+            const frame = document.getElementById('imap-frame');
+            if (!imapLoaded) {
+                ensureImapLoaded();
+                return;
+            }
+            frame.src = '/imap/?embedded=1';
+        }
+
+        let autoRefreshTimer = null;
+        const AUTO_REFRESH_INTERVAL = 15000;
+
+        function _autoPref() { try { return localStorage.getItem('bearer-autorefresh') !== '0'; } catch (e) { return true; } }
+        function _saveAutoPref(on) { try { localStorage.setItem('bearer-autorefresh', on ? '1' : '0'); } catch (e) { /* ignore */ } }
+
+        function _startAutoRefresh() {
+            if (autoRefreshTimer || currentTab !== 'inbox' || !currentEmail) return;
+            autoRefreshTimer = setInterval(() => { queryInbox(true); }, AUTO_REFRESH_INTERVAL);
+            document.getElementById('auto-refresh-toggle').checked = true;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => { document.getElementById('auto-refresh-toggle').checked = _autoPref(); });
+
+        // Called by the switch itself; the choice is remembered. Auto-refresh is ON unless the user turned it off.
+        function toggleAutoRefresh(enabled) {
+            _saveAutoPref(enabled);
+            if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+            if (enabled && currentTab === 'inbox' && currentEmail) {
+                _startAutoRefresh();
+            } else if (enabled) {
+                document.getElementById('auto-refresh-toggle').checked = true; // will start once an inbox is open
+            } else {
+                document.getElementById('auto-refresh-toggle').checked = false;
+            }
+        }
+
+        let currentTab = 'inbox';
+
+        const TAB_META = {
+            inbox: { key: 'inbox', icon: 'bi-envelope-open' },
+            sent: { key: 'sent', icon: 'bi-send' },
+            trash: { key: 'trash', icon: 'bi-trash' },
+            imap: { key: null, icon: 'bi-diagram-3' },
+        };
+
+        function _syncListHeader(tab) {
+            const meta = TAB_META[tab] || TAB_META.inbox;
+            const titleText = document.getElementById('mail-list-title-text');
+            const icon = document.querySelector('#mail-list-title i');
+            titleText.textContent = meta.key ? t(meta.key) : 'IMAP';
+            if (icon) icon.className = `bi ${meta.icon} me-2`;
+            document.getElementById('mail-list-mailbox').textContent = currentEmail || '';
+            const drawerLabel = document.getElementById('drawer-mailbox-label');
+            if (drawerLabel) drawerLabel.textContent = currentEmail ? currentEmail.split('@')[0] : 'Mailboxes';
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.body.dataset.activeTab = tab;
+            ['inbox', 'sent', 'trash', 'imap', 'setup', 'drive', 'calendar'].forEach(name => {
+                const b = document.getElementById('bnav-' + name);
+                if (b) b.classList.toggle('active', name === tab);
+            });
+            if (_isPhone()) window.scrollTo(0, 0);
+            const searchBar = document.getElementById('search-bar');
+            const leftColumn = document.getElementById('mail-left-column');
+            const listColumn = document.getElementById('mail-list-column');
+            const detailColumn = document.getElementById('mail-detail-column');
+            const imapPanel = document.getElementById('imap-panel');
+
+            if (tab !== 'inbox' && autoRefreshTimer) {
+                clearInterval(autoRefreshTimer);
+                autoRefreshTimer = null;
+                document.getElementById('auto-refresh-toggle').checked = false;
+            }
+            isSearchMode = false;
+            showMailListView();
+            _syncListHeader(tab);
+            document.getElementById('btn-left-drawer').classList.toggle('d-none', !['inbox', 'sent', 'trash'].includes(tab));
+
+            if (tab === 'inbox') {
+                leftColumn.style.display = '';
+                listColumn.style.display = '';
+                detailColumn.style.display = '';
+                imapPanel.style.display = 'none';
+                _showBatchBar(currentMessages.length > 0);
+                searchBar.style.display = currentEmail ? 'flex' : 'none';
+                if (currentMessages.length > 0) {
+                    renderMessages(currentMessages);
+                } else if (currentEmail) {
+                    queryInbox();
+                }
+                resetMailDetail();
+            } else {
+                searchBar.style.display = 'none';
+                document.getElementById('search-input').value = '';
+                _showBatchBar(false);
+                if (tab === 'sent' || tab === 'trash') {
+                    leftColumn.style.display = '';
+                    listColumn.style.display = '';
+                    detailColumn.style.display = '';
+                    imapPanel.style.display = 'none';
+                    if (currentEmail) {
+                        tab === 'sent' ? querySent() : queryTrash();
+                    } else {
+                        document.getElementById('mail-list').innerHTML = `<div class="mailbox-chooser"><i class="bi bi-inboxes" style="font-size:2.2rem;opacity:.4"></i><div class="mt-2">${t('queryFirst')}</div><div class="chooser-list" id="mailbox-chooser"></div></div>`;
+                        if (window.BearerSetup) BearerSetup.refreshSidebar();
+                    }
+                    resetMailDetail();
+                } else {
+                    leftColumn.style.display = 'none';
+                    listColumn.style.display = 'none';
+                    detailColumn.style.display = 'none';
+                    imapPanel.style.display = tab === 'imap' ? 'block' : 'none';
+                    if (tab === 'imap') ensureImapLoaded();
+                }
+            }
+            ['inbox', 'sent', 'trash', 'imap', 'setup', 'drive', 'calendar'].forEach(name => {
+                const btn = document.getElementById('tab-' + name);
+                if (btn) { btn.classList.toggle('btn-primary', name === tab); btn.classList.toggle('btn-outline-secondary', name !== tab); }
+            });
+            document.getElementById('setup-panel').style.display = tab === 'setup' ? 'block' : 'none';
+            document.getElementById('drive-panel').style.display = tab === 'drive' ? 'block' : 'none';
+            document.getElementById('calendar-panel').style.display = tab === 'calendar' ? 'block' : 'none';
+            if (tab === 'setup') BearerSetup.open();
+            if (tab === 'drive' && window.BearerDrive) BearerDrive.open();
+            if (tab === 'calendar' && window.BearerCalendar) BearerCalendar.open();
+        }
+
+        function refreshCurrentTab() {
+            if (currentTab === 'inbox') queryInbox();
+            else if (currentTab === 'sent') querySent();
+            else if (currentTab === 'trash') queryTrash();
+            else if (currentTab === 'drive' && window.BearerDrive) BearerDrive.open();
+            else if (currentTab === 'calendar' && window.BearerCalendar) BearerCalendar.open();
+            else reloadImapFrame();
+        }
+
+        async function querySent(append = false) {
+            if (!currentEmail) return;
+            const mailList = document.getElementById('mail-list');
+            const offset = append ? currentSentMessages.length : 0;
+            if (!append) mailList.innerHTML = `<div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> ${t('loading')}</div>`;
+
+            try {
+                const resp = await fetch('/api/sent/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentEmail, offset, limit: PAGE_SIZE })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    mailList.innerHTML = `<div class="error-state"><p>${_escapeHtml(data.message || t('loadFailed'))}</p></div>`;
+                    return;
+                }
+                currentSentTotal = data.total || data.messages.length;
+                renderSentMessages(append ? currentSentMessages.concat(data.messages) : data.messages);
+            } catch (e) {
+                mailList.innerHTML = `<div class="error-state"><p>${t('loadFailed')}: ${_escapeHtml(e.message)}</p></div>`;
+            }
+        }
+
+        function renderSentMessages(messages) {
+            currentSentMessages = messages;
+            const mailList = document.getElementById('mail-list');
+            _showBatchBar(messages.length > 0);
+            if (messages.length === 0) {
+                mailList.innerHTML = `<div class="empty-state"><i class="bi bi-send d-block"></i><p>${t('noSentMail')}</p></div>`;
+                return;
+            }
+            mailList.innerHTML = messages.map(msg => {
+                const toStr = _escapeHtml((msg.to || []).join(', '));
+                const subject = _escapeHtml(msg.subject || t('noSubject'));
+                return `
+                    <div class="card mb-2 mail-item" data-msg-id="${msg.id}">
+                        <div class="card-body py-2"><div class="d-flex align-items-start">
+                            ${_rowCheckbox(msg.id)}
+                            <div class="flex-grow-1 mail-item-body" style="min-width:0" onclick="viewSentDetailById('${msg.id}', this.closest('.mail-item'))">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <strong class="text-truncate me-2"><i class="bi bi-arrow-right me-1 text-muted"></i><span class="mail-copy">${toStr}</span></strong>
+                                <small class="text-muted mail-item-meta" title="${_escapeHtml(new Date(msg.createdAt).toLocaleString())}">${_formatListDate(msg.createdAt)}</small>
+                            </div>
+                            <div class="text-truncate"><span class="mail-copy">${subject}</span></div>
+                            </div>
+                        </div></div>
+                    </div>`;
+            }).join('');
+            if (currentSentTotal > currentSentMessages.length) {
+                mailList.insertAdjacentHTML('beforeend', `<div class="text-center py-3"><button class="btn btn-outline-primary btn-sm" onclick="querySent(true)"><i class="bi bi-arrow-down-circle me-1"></i>${t('loadMore')} (${currentSentMessages.length}/${currentSentTotal})</button></div>`);
+            }
+        }
+
+        async function viewSentDetailById(messageId, element) {
+            const msg = currentSentMessages.find(item => item.id === messageId);
+            if (!msg) return;
+            document.querySelectorAll('.mail-item').forEach(el => el.classList.remove('active'));
+            if (element) element.classList.add('active');
+            showMailDetailView();
+            document.getElementById('mail-detail-content').innerHTML = `<div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> ${t('loading')}</div>`;
+            try {
+                const resp = await fetch('/api/sent/detail', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentEmail, message_id: messageId })
+                });
+                const data = await resp.json();
+                viewSentDetail(element, data.success ? data.detail : msg);
+            } catch (e) {
+                viewSentDetail(element, msg);
+            }
+        }
+
+        function viewSentDetail(element, msg) {
+            document.querySelectorAll('.mail-item').forEach(el => el.classList.remove('active'));
+            if (element) element.classList.add('active');
+            const detailContent = document.getElementById('mail-detail-content');
+            const toStr = _escapeHtml((msg.to || []).join(', '));
+            detailContent.innerHTML = `
+                <div class="detail-toolbar">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="forwardSent('${_escapeHtml(msg.id)}')" title="${t('forward')}"><i class="bi bi-forward"></i><span class="btn-label">${t('forward')}</span></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="saveMessageToDrive('${_escapeHtml(msg.id)}', 'pdf', true)" title="Save to Drive as PDF"><i class="bi bi-hdd"></i><span class="btn-label">Save PDF</span></button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteSentMessages(['${_escapeHtml(msg.id)}'])" title="${t('delete')}"><i class="bi bi-trash"></i><span class="btn-label">${t('delete')}</span></button>
+                </div>
+                <h2 class="detail-subject">${_escapeHtml(msg.subject || t('noSubject'))}</h2>
+                ${_detailMetaRow(t('from'), _escapeHtml(msg.from_address || currentEmail))}
+                ${_detailMetaRow(t('to'), toStr)}
+                ${_detailMetaRow(t('time'), new Date(msg.createdAt).toLocaleString())}
+                <div class="mail-body-container mt-2" style="background:#f8f9fa; padding:0; border-radius:8px; overflow:hidden;">
+                    <iframe id="sent-body-frame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" style="width:100%;border:none;min-height:120px;"></iframe>
+                </div>`;
+            const iframe = document.getElementById('sent-body-frame');
+            const mailContent = msg.html || _escapeHtml(msg.text || '').replace(/\n/g, '<br>') || `<i style="color:#6c757d;">${t('emptyContent')}</i>`;
+            _renderMailBodyIframe(iframe, mailContent, { showImages: true });  // your own sent mail
+            _detailPrivacyState = null;
+            detailContent.scrollTop = 0;
+        }
+
+        async function queryTrash(append = false) {
+            if (!currentEmail) return;
+            const mailList = document.getElementById('mail-list');
+            const offset = append ? currentTrashMessages.length : 0;
+            if (!append) mailList.innerHTML = `<div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> ${t('loading')}</div>`;
+
+            try {
+                const resp = await fetch('/api/trash/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentEmail, offset, limit: PAGE_SIZE })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    mailList.innerHTML = `<div class="error-state"><p>${_escapeHtml(data.message || t('loadFailed'))}</p></div>`;
+                    return;
+                }
+                currentTrashTotal = data.total || data.messages.length;
+                renderTrashMessages(append ? currentTrashMessages.concat(data.messages) : data.messages);
+            } catch (e) {
+                mailList.innerHTML = `<div class="error-state"><p>${t('loadFailed')}: ${_escapeHtml(e.message)}</p></div>`;
+            }
+        }
+
+        function renderTrashMessages(messages) {
+            currentTrashMessages = messages;
+            const mailList = document.getElementById('mail-list');
+            _showBatchBar(messages.length > 0);
+            if (messages.length === 0) {
+                mailList.innerHTML = `<div class="empty-state"><i class="bi bi-trash d-block"></i><p>${t('noTrashMail')}</p></div>`;
+                return;
+            }
+            mailList.innerHTML = messages.map(msg => `
+                <div class="card mb-2 mail-item" data-msg-id="${msg.id}">
+                    <div class="card-body py-2"><div class="d-flex align-items-start">
+                        ${_rowCheckbox(msg.id)}
+                        <div class="flex-grow-1 mail-item-body" style="min-width:0" onclick="viewMailDetail('${msg.id}', this.closest('.mail-item'), true)">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <span class="mail-sender text-truncate me-2"><span class="mail-copy">${_escapeHtml(msg.from?.name || msg.from?.address || t('unknownSender'))}</span></span>
+                            <small class="text-muted mail-item-meta" title="${_escapeHtml(new Date(msg.createdAt).toLocaleString())}">${_formatListDate(msg.createdAt)}</small>
+                        </div>
+                        <div class="mail-subject text-truncate"><span class="mail-copy">${_escapeHtml(msg.subject || t('noSubject'))}</span></div>
+                        <small class="mail-intro text-muted text-truncate d-block"><span class="mail-copy">${_escapeHtml(msg.intro || '')}</span></small>
+                        </div>
+                    </div></div>
+                </div>
+            `).join('');
+            if (currentTrashTotal > currentTrashMessages.length) {
+                mailList.insertAdjacentHTML('beforeend', `<div class="text-center py-3"><button class="btn btn-outline-primary btn-sm" onclick="queryTrash(true)"><i class="bi bi-arrow-down-circle me-1"></i>${t('loadMore')} (${currentTrashMessages.length}/${currentTrashTotal})</button></div>`);
+            }
+        }
+
+        function resetMailDetail() {
+            document.getElementById('mail-detail-content').innerHTML = `
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-envelope-paper" style="font-size:3rem;opacity:0.3;"></i>
+                    <p class="mt-3">${t('selectMailHint')}</p>
+                </div>`;
+            document.querySelectorAll('.mail-item').forEach(el => el.classList.remove('active'));
+            window._currentDetailMsg = null;
+            showMailListView();
+        }
+
+        async function queryInbox(silent = false, append = false) {
+            if (!silent && !append) resetMailDetail();
+            const prefix = document.getElementById('inbox-prefix').value.trim();
+            const domain = document.getElementById('inbox-domain').value;
+            const email = prefix ? `${prefix}@${domain}` : '';
+            const errorDiv = document.getElementById('inbox-error');
+            const btn = document.getElementById('btn-query-inbox');
+            const mailList = document.getElementById('mail-list');
+            
+            if (!prefix) {
+                if (!silent) {
+                    errorDiv.textContent = t('enterPrefixErr');
+                    errorDiv.style.display = 'block';
+                }
+                return;
+            }
+            
+            const reqOffset = append ? currentMessages.length : 0;
+            
+            errorDiv.style.display = 'none';
+            if (!silent && !append) {
+                btn.disabled = true;
+                btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${t('querying')}`;
+                mailList.innerHTML = `
+                    <div class="card mb-2">
+                        <div class="card-body py-3">
+                            <div class="skeleton skeleton-title"></div>
+                            <div class="skeleton skeleton-text" style="width:80%"></div>
+                            <div class="skeleton skeleton-text" style="width:60%"></div>
+                        </div>
+                    </div>
+                    <div class="card mb-2">
+                        <div class="card-body py-3">
+                            <div class="skeleton skeleton-title"></div>
+                            <div class="skeleton skeleton-text" style="width:75%"></div>
+                        </div>
+                    </div>`;
+            }
+            if (append) {
+                const loadMoreBtn = document.getElementById('btn-load-more');
+                if (loadMoreBtn) {
+                    loadMoreBtn.disabled = true;
+                    loadMoreBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${t('loading')}`;
+                }
+            }
+            
+            try {
+                const resp = await fetch('/api/inbox/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, offset: reqOffset, limit: PAGE_SIZE })
+                });
+                const data = await resp.json();
+                
+                if (!data.success) {
+                    if (!silent) {
+                        errorDiv.textContent = data.message;
+                        errorDiv.style.display = 'block';
+                        mailList.innerHTML = `
+                            <div class="error-state">
+                                <i class="bi bi-exclamation-triangle d-block"></i>
+                                <p>${_escapeHtml(data.message || t('queryFailed'))}</p>
+                            </div>`;
+                    }
+                    return;
+                }
+                
+                currentEmail = email;
+                currentTotal = data.total || 0;
+                if (_autoPref()) _startAutoRefresh();
+                isSearchMode = false;
+                if (!silent) {
+                    rememberMailbox(email);
+                    closeLeftDrawer();
+                    refreshStorage();
+                }
+                _syncListHeader(currentTab);
+
+                if (append) {
+                    currentMessages = currentMessages.concat(data.messages);
+                } else {
+                    currentMessages = data.messages;
+                }
+                
+                document.getElementById('btn-refresh-mail').disabled = false;
+                currentSentMessages = [];
+                currentTrashMessages = [];
+                if (currentTab === 'inbox') {
+                    document.getElementById('search-bar').style.display = 'flex';
+                }
+                
+                let activeId = null;
+                let checkedIds = [];
+                if (silent) {
+                    const activeEl = document.querySelector('.mail-item.active');
+                    if (activeEl) activeId = activeEl.dataset.msgId;
+                    checkedIds = getSelectedIds();
+                }
+                
+                renderMessages(currentMessages);
+                
+                if (silent || append) {
+                    if (activeId) {
+                        const el = document.querySelector(`.mail-item[data-msg-id="${activeId}"]`);
+                        if (el) el.classList.add('active');
+                    }
+                    if (checkedIds.length > 0) {
+                        checkedIds.forEach(id => {
+                            const cb = document.querySelector(`.mail-checkbox[value="${id}"]`);
+                            if (cb) cb.checked = true;
+                        });
+                        updateBatchButtons();
+                    }
+                }
+                
+            } catch (e) {
+                if (!silent) {
+                    errorDiv.textContent = t('networkError') + ': ' + e.message;
+                    errorDiv.style.display = 'block';
+                    mailList.innerHTML = `
+                        <div class="error-state">
+                            <i class="bi bi-exclamation-triangle d-block"></i>
+                            <p>${t('networkError')}: ${_escapeHtml(e.message)}</p>
+                        </div>`;
+                }
+            } finally {
+                if (!silent) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="bi bi-search me-1"></i>${t('query')}`;
+                }
+            }
+        }
+
+        function renderMessages(messages) {
+            const mailList = document.getElementById('mail-list');
+            _showBatchBar(messages.length > 0 && currentTab === 'inbox');
+            
+            if (messages.length === 0) {
+                mailList.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-inbox d-block"></i>
+                        <p>${t('inboxEmpty')}</p>
+                        <button class="btn-refresh" onclick="queryInbox()">
+                            <i class="bi bi-arrow-clockwise"></i>${t('refresh')}
+                        </button>
+                    </div>`;
+                return;
+            }
+            
+            mailList.innerHTML = messages.map(msg => `
+                <div class="card mb-2 mail-item ${msg.seen ? '' : 'mail-unread'}" data-msg-id="${msg.id}">
+                    <div class="card-body py-2">
+                        <div class="d-flex align-items-start">
+                            ${_rowCheckbox(msg.id)}
+                            <div class="flex-grow-1 mail-item-body" onclick="viewMailDetail('${msg.id}', this.closest('.mail-item'))">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <span class="mail-sender text-truncate me-2"><span class="mail-copy">${_escapeHtml(msg.from?.name || msg.from?.address || t('unknownSender'))}</span>${BearerPrivacy.verdictIcon(msg.authVerdict, msg.riskyAttachments)}</span>
+                                    <div class="mail-item-meta text-end ms-2">
+                                        ${msg.extracted_code ? `<button type="button" class="badge bg-success me-1 code-badge" title="${t('copyCode')}" onclick="copyText('${msg.extracted_code}', event)"><i class="bi bi-clipboard me-1"></i>${msg.extracted_code}</button>` : ''}
+                                        ${msg.hasAttachments ? '<i class="bi bi-paperclip text-muted me-1" title="Has attachments"></i>' : ''}<small class="text-muted" title="${_escapeHtml(new Date(msg.createdAt).toLocaleString())}">${_formatListDate(msg.createdAt)}</small>
+                                    </div>
+                                </div>
+                                <div class="mail-subject text-truncate"><span class="mail-copy">${_escapeHtml(msg.subject || t('noSubject'))}</span></div>
+                                <small class="mail-intro text-muted text-truncate d-block"><span class="mail-copy">${_escapeHtml(msg.intro || '')}</span></small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            if (!isSearchMode && currentTotal > currentMessages.length && currentTab === 'inbox') {
+                mailList.insertAdjacentHTML('beforeend', `
+                    <div class="text-center py-3">
+                        <button class="btn btn-outline-primary btn-sm" id="btn-load-more" onclick="queryInbox(false, true)">
+                            <i class="bi bi-arrow-down-circle me-1"></i>${t('loadMore')} (${currentMessages.length}/${currentTotal})
+                        </button>
+                    </div>`);
+            }
+            _updateUnreadBadge();
+        }
+
+        async function searchMail() {
+            if (!currentEmail) return;
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) { clearSearch(); return; }
+
+            const mailList = document.getElementById('mail-list');
+            mailList.innerHTML = `<div class="text-center py-3"><span class="spinner-border spinner-border-sm"></span> ${t('searching')}</div>`;
+
+            try {
+                const resp = await fetch('/api/inbox/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentEmail, query })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    isSearchMode = true;
+                    renderMessages(data.messages);
+                    if (data.messages.length === 0) {
+                        mailList.innerHTML = `
+                            <div class="empty-state">
+                                <i class="bi bi-search d-block"></i>
+                                <p>${t('noMatch')}</p>
+                                <button class="btn-refresh" onclick="clearSearch()">
+                                    <i class="bi bi-x-lg"></i>${t('clearSearchBtn')}
+                                </button>
+                            </div>`;
+                    }
+                } else {
+                    mailList.innerHTML = `<div class="error-state"><p>${_escapeHtml(data.message || t('searchFailed'))}</p></div>`;
+                }
+            } catch (e) {
+                mailList.innerHTML = `<div class="error-state"><p>${t('searchFailed')}: ${_escapeHtml(e.message)}</p></div>`;
+            }
+        }
+
+        function clearSearch() {
+            document.getElementById('search-input').value = '';
+            isSearchMode = false;
+            renderMessages(currentMessages);
+        }
+
+
+        function _addressText(entry) {
+            if (!entry) return '';
+            if (typeof entry === 'string') return entry;
+            return entry.address || entry.name || '';
+        }
+
+        function _renderAddressList(list) {
+            const entries = (Array.isArray(list) ? list : []).map(_addressText).filter(Boolean);
+            if (entries.length === 0) return '';
+            return entries.map(addr => {
+                const isSelf = currentEmail && addr.toLowerCase() === currentEmail.toLowerCase();
+                return `<span class="${isSelf ? 'detail-self-address' : ''}">${_escapeHtml(addr)}</span>`;
+            }).join(', ');
+        }
+
+        function _detailMetaRow(label, valueHtml) {
+            if (!valueHtml) return '';
+            return `<div class="detail-meta-row"><span class="detail-meta-label">${label}:</span><span class="detail-meta-value">${valueHtml}</span></div>`;
+        }
+
+        function _detailActions(messageId, isTrash) {
+            const btn = (cls, onclick, icon, label, extra = '') =>
+                `<button type="button" class="btn btn-sm ${cls}" onclick="${onclick}" title="${label}" aria-label="${label}" ${extra}><i class="bi ${icon}"></i><span class="btn-label">${label}</span></button>`;
+            if (isTrash) {
+                return btn('btn-outline-primary', `restoreEmail('${messageId}')`, 'bi-arrow-counterclockwise', t('restore'))
+                    + btn('btn-outline-danger', `permanentDeleteEmail('${messageId}')`, 'bi-x-circle', t('permanentDelete'));
+            }
+            return `
+                ${btn('btn-outline-primary', 'openReply()', 'bi-reply', t('reply'))}
+                ${btn('btn-outline-primary', 'openReplyAll()', 'bi-reply-all', t('replyAll'))}
+                ${btn('btn-outline-secondary', 'openForward()', 'bi-forward', t('forward'))}
+                ${btn('btn-outline-danger', `deleteEmail('${messageId}')`, 'bi-trash', t('delete'))}
+                <div class="dropdown d-inline-block">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" aria-expanded="false" title="More" aria-label="More actions"><i class="bi bi-three-dots"></i></button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><button type="button" class="dropdown-item" id="btn-toggle-plain" onclick="togglePlainText()"><i class="bi bi-file-text me-2"></i>${t('viewPlain')}</button></li>
+                        <li><button type="button" class="dropdown-item" onclick="downloadEml('${messageId}')"><i class="bi bi-download me-2"></i>${t('downloadEml')}</button></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Save to Drive</h6></li>
+                        <li><button type="button" class="dropdown-item" onclick="saveMessageToDrive('${messageId}', 'pdf')"><i class="bi bi-filetype-pdf me-2"></i>As PDF</button></li>
+                        <li><button type="button" class="dropdown-item" onclick="saveMessageToDrive('${messageId}', 'docx')"><i class="bi bi-file-earmark-word me-2"></i>As Word document</button></li>
+                        <li><button type="button" class="dropdown-item" onclick="saveMessageToDrive('${messageId}', 'eml')"><i class="bi bi-envelope-paper me-2"></i>As email file (.eml)</button></li>
+                        ${(window._currentDetailMsg?.attachments || []).map((a, i) => `<li><button type="button" class="dropdown-item text-truncate" style="max-width:280px" onclick="saveAttachmentToDrive('${messageId}', '${_escapeHtml(String(a.id ?? a.index ?? i))}')"><i class="bi bi-paperclip me-2"></i>${_escapeHtml(a.filename || 'attachment')}</button></li>`).join('')}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><button type="button" class="dropdown-item" onclick="BearerCalendar.fromMessage('${messageId}')"><i class="bi bi-calendar-plus me-2"></i>Add to calendar</button></li>
+                    </ul>
+                </div>`;
+        }
+
+        // "3:05 PM" today, "Mon" this week, "Sep 3" this year, "Sep 3, 2024" before. Long form adds the time.
+        function _formatListDate(iso, long = false) {
+            const d = new Date(iso);
+            if (isNaN(d)) return '';
+            const now = new Date();
+            const sameDay = d.toDateString() === now.toDateString();
+            const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            if (sameDay) return time;
+            const days = (now - d) / 86400000;
+            let day;
+            if (days < 6.5 && days > 0) day = d.toLocaleDateString([], { weekday: 'short' });
+            else if (d.getFullYear() === now.getFullYear()) day = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            else day = d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+            return long ? `${day}, ${time}` : day;
+        }
+
+        // The detail pane is reused for every message, so one delegated listener reads the current state.
+        let _detailPrivacyState = null;
+
+        function _wireDetailPrivacy(container, msg, iframe, mailContent, isSent = false) {
+            _detailPrivacyState = { container, msg, iframe, mailContent, isSent };
+        }
+
+        function _showDetailImages() {
+            const s = _detailPrivacyState;
+            if (!s) return;
+            _renderMailBodyIframe(s.iframe, s.mailContent, { showImages: true });
+            const slot = s.container.querySelector('#privacy-bar-slot');
+            if (slot) slot.innerHTML = BearerPrivacy.privacyBar(s.msg, s.isSent, true);
+        }
+
+        document.getElementById('mail-detail-content').addEventListener('click', async (ev) => {
+            if (ev.target.closest('[data-bm-show-images]')) { _showDetailImages(); return; }
+            const trust = ev.target.closest('[data-bm-trust]');
+            if (trust) {
+                const addr = trust.getAttribute('data-bm-trust');
+                try {
+                    const list = (BearerPrivacy.settings.trusted_senders || []).concat([addr]);
+                    await BearerPrivacy.saveSettings({ trusted_senders: list });
+                    showToast(`Images from ${addr} will always be shown`, { type: 'success' });
+                } catch (e) { toastError(e.message); }
+                _showDetailImages();
+                return;
+            }
+            const att = ev.target.closest('a[data-bm-risk="high"]');
+            if (att && !att.dataset.confirmed) {
+                ev.preventDefault();
+                showConfirm({
+                    title: 'Risky attachment',
+                    message: `${att.dataset.bmName}\n\n${att.dataset.bmReasons || 'This kind of file can harm your computer.'}\n\nOnly open it if you were expecting it from someone you trust.`,
+                    okLabel: 'Download anyway',
+                    onConfirm: () => { att.dataset.confirmed = '1'; att.click(); },
+                });
+            }
+        });
+
+        function togglePlainText() {
+            const htmlBox = document.getElementById('mail-body-html');
+            const plainBox = document.getElementById('mail-body-plain');
+            const btn = document.getElementById('btn-toggle-plain');
+            if (!htmlBox || !plainBox) return;
+            const showPlain = plainBox.style.display === 'none';
+            plainBox.style.display = showPlain ? 'block' : 'none';
+            htmlBox.style.display = showPlain ? 'none' : 'block';
+            if (btn) {
+                btn.innerHTML = showPlain
+                    ? `<i class="bi bi-code-slash me-1"></i>${t('viewHtml')}`
+                    : `<i class="bi bi-file-text me-1"></i>${t('viewPlain')}`;
+            }
+        }
+
+        async function downloadEml(messageId) {
+            const filename = `${(window._currentDetailMsg?.subject || messageId).slice(0, 60).replace(/[\\/:*?"<>|]/g, '_')}.eml`;
+            const url = `/api/inbox/source/${encodeURIComponent(messageId)}?email=${encodeURIComponent(currentEmail)}&filename=${encodeURIComponent(filename)}`;
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) {
+                    toastError(resp.status === 404 ? t('emlUnavailable') : t('loadFailed'));
+                    return;
+                }
+                const blob = await resp.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            } catch (e) {
+                toastError(t('networkError') + ': ' + e.message);
+            }
+        }
+
+        async function viewMailDetail(messageId, element, isTrash = false) {
+            if (!currentEmail) return;
+
+            document.querySelectorAll('.mail-item').forEach(el => el.classList.remove('active'));
+            if (element) element.classList.add('active');
+            showMailDetailView();
+
+            const detailContent = document.getElementById('mail-detail-content');
+
+            detailContent.innerHTML = `
+                <div class="mb-3"><div class="skeleton skeleton-text" style="width:50%"></div></div>
+                <div class="mb-3"><div class="skeleton skeleton-text" style="width:70%"></div></div>
+                <div class="mb-3"><div class="skeleton skeleton-text" style="width:40%"></div></div>
+                <hr>
+                <div style="background:#f8f9fa; padding:15px; border-radius:8px;">
+                    <div class="skeleton skeleton-text mb-2" style="width:90%"></div>
+                    <div class="skeleton skeleton-text mb-2" style="width:85%"></div>
+                    <div class="skeleton skeleton-text" style="width:60%"></div>
+                </div>`;
+            
+            try {
+                const resp = await fetch('/api/inbox/detail', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        email: currentEmail, 
+                        message_id: messageId 
+                    })
+                });
+                const data = await resp.json();
+                
+                if (!data.success) {
+                    detailContent.innerHTML = `
+                        <div class="error-state">
+                            <i class="bi bi-exclamation-triangle d-block"></i>
+                            <p>${_escapeHtml(data.message || t('loadFailed'))}</p>
+                        </div>`;
+                    return;
+                }
+
+                const msg = data.detail;
+                window._currentDetailMsg = msg;
+                const idx = currentMessages.findIndex(m => m.id === messageId);
+                if (!isTrash && idx !== -1) currentMessages[idx].seen = true;
+                if (!isTrash && element) element.classList.remove('mail-unread');
+                _updateUnreadBadge();
+                const fromName = _escapeHtml(msg.from?.name || '');
+                const fromAddr = _escapeHtml(msg.from?.address || '');
+                const codeHtml = msg.extracted_code
+                    ? `<button type="button" class="badge bg-success code-badge" title="${t('copyCode')}" onclick="copyText('${msg.extracted_code}', event)"><i class="bi bi-clipboard me-1"></i>${msg.extracted_code}</button>`
+                    : '';
+                await BearerPrivacy.loadSettings();
+                const showImages = BearerPrivacy.shouldShowImages(msg, false);
+                const attachmentUrl = (att, index) => `/api/inbox/attachment/${encodeURIComponent(messageId)}/${_attachmentId(att, index)}?email=${encodeURIComponent(currentEmail)}&filename=${encodeURIComponent(att.filename || `attachment_${index}`)}`;
+                const verdict = BearerPrivacy.verdictOf(msg.auth);
+                const verifiedMark = verdict === 'pass' ? '<i class="bi bi-patch-check-fill text-success ms-1" title="Sender verified (SPF/DKIM/DMARC)"></i>' : '';
+
+                detailContent.innerHTML = `
+                    <div class="detail-toolbar">${_detailActions(messageId, isTrash)}</div>
+                    <h2 class="detail-subject">${_escapeHtml(msg.subject || t('noSubject'))}</h2>
+                    <div class="detail-from">
+                        <div class="detail-avatar" aria-hidden="true">${_escapeHtml(((msg.from?.name || msg.from?.address || '?').trim()[0] || '?').toUpperCase())}</div>
+                        <div class="detail-from-text">
+                            <div class="detail-from-name">${fromName || fromAddr}${verifiedMark}</div>
+                            ${fromName ? `<div class="detail-from-addr">${fromAddr}</div>` : ''}
+                        </div>
+                        <div class="detail-date">${_formatListDate(msg.createdAt, true)}</div>
+                    </div>
+                    <details class="detail-more">
+                        <summary>${t('to')}: ${_renderAddressList(msg.to) || '-'}</summary>
+                        ${_detailMetaRow(t('cc'), _renderAddressList(msg.cc))}
+                        ${msg.replyTo ? _detailMetaRow('Reply-To', _escapeHtml(msg.replyTo)) : ''}
+                        ${_detailMetaRow(t('time'), new Date(msg.createdAt).toLocaleString())}
+                        ${msg.auth && !msg.auth.skipped ? _detailMetaRow('Sender check', BearerPrivacy.authChips(msg.auth)) : ''}
+                    </details>
+                    ${codeHtml ? _detailMetaRow(t('verifyCode'), codeHtml) : ''}
+                    ${BearerPrivacy.banners(msg, false)}
+                    <div id="privacy-bar-slot">${BearerPrivacy.privacyBar(msg, false, showImages)}</div>
+                    ${BearerPrivacy.attachmentsHtml(msg.attachments, attachmentUrl, _formatSize)}
+                    <div class="mail-body-container" id="mail-body-html" style="background:#f8f9fa; padding:0; border-radius:8px; overflow:hidden;">
+                        <iframe id="mail-body-frame" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" style="width:100%;border:none;min-height:120px;"></iframe>
+                    </div>
+                    <pre id="mail-body-plain" class="mail-plaintext" style="display:none;background:#f8f9fa;border-radius:8px;"></pre>
+                `;
+                document.getElementById('mail-body-plain').textContent = msg.text || t('emptyContent');
+                const iframe = document.getElementById('mail-body-frame');
+                const mailContent = msg.html || _escapeHtml(msg.text || '').replace(/\n/g, '<br>') || `<i style="color:#6c757d;">${t('emptyContent')}</i>`;
+                _renderMailBodyIframe(iframe, mailContent, { showImages });
+                _wireDetailPrivacy(detailContent, msg, iframe, mailContent);
+                detailContent.scrollTop = 0;
+                
+            } catch (e) {
+                detailContent.innerHTML = `<div class="alert alert-danger">${t('loadFailed')}: ${e.message}</div>`;
+            }
+        }
+
+
+        let composeModal = null;
+        let quillEditor = null;
+
+        function _getComposeModal() {
+            if (!composeModal) {
+                composeModal = new bootstrap.Modal(document.getElementById('composeModal'));
+            }
+            return composeModal;
+        }
+
+        function _getQuillEditor() {
+            if (!quillEditor) {
+                quillEditor = new Quill('#compose-editor', {
+                    theme: 'snow',
+                    placeholder: t('editorPlaceholder'),
+                    modules: {
+                        toolbar: [
+                            [{ 'header': [1, 2, 3, false] }],
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ 'color': [] }, { 'background': [] }],
+                            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                            ['blockquote', 'code-block'],
+                            ['link', 'image'],
+                            ['clean'],
+                        ],
+                    },
+                });
+                quillEditor.on('text-change', saveDraft);
+            }
+            return quillEditor;
+        }
+
+        function _syncComposeDomains() {
+            const sel = document.getElementById('compose-from-domain');
+            const prev = sel.value;
+            sel.innerHTML = activeDomains.map(d => `<option value="${d}">${d}</option>`).join('');
+            if (activeDomains.includes(prev)) sel.value = prev;
+        }
+
+        const EMAIL_RE = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
+        let recipients = [];
+
+        function renderRecipients() {
+            const wrap = document.getElementById('compose-to-chips');
+            const input = document.getElementById('compose-to-input');
+            wrap.querySelectorAll('.chip').forEach(el => el.remove());
+            recipients.forEach((addr, index) => {
+                const chip = document.createElement('span');
+                chip.className = 'chip' + (EMAIL_RE.test(addr) ? '' : ' chip-invalid');
+                const text = document.createElement('span');
+                text.className = 'chip-text';
+                text.textContent = addr;
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'chip-remove';
+                remove.innerHTML = '<i class="bi bi-x-lg"></i>';
+                remove.onclick = (e) => { e.stopPropagation(); recipients.splice(index, 1); renderRecipients(); saveDraft(); };
+                chip.appendChild(text);
+                chip.appendChild(remove);
+                wrap.insertBefore(chip, input);
+            });
+        }
+
+        function addRecipients(raw) {
+            const parts = String(raw || '').split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+            let added = false;
+            parts.forEach(addr => {
+                if (!recipients.some(x => x.toLowerCase() === addr.toLowerCase())) {
+                    recipients.push(addr);
+                    added = true;
+                }
+            });
+            if (added) { renderRecipients(); saveDraft(); }
+        }
+
+        function setRecipients(list) {
+            recipients = [];
+            (list || []).filter(Boolean).forEach(addr => {
+                if (!recipients.some(x => x.toLowerCase() === addr.toLowerCase())) recipients.push(addr);
+            });
+            renderRecipients();
+        }
+
+        function focusRecipientInput(event) {
+            if (event && event.target.closest('.chip')) return;
+            document.getElementById('compose-to-input').focus();
+        }
+
+        function _initRecipientInput() {
+            const wrap = document.getElementById('compose-to-chips');
+            const input = document.getElementById('compose-to-input');
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
+                    e.preventDefault();
+                    addRecipients(input.value);
+                    input.value = '';
+                } else if (e.key === 'Backspace' && !input.value && recipients.length > 0) {
+                    recipients.pop();
+                    renderRecipients();
+                    saveDraft();
+                }
+            });
+            input.addEventListener('blur', () => {
+                if (input.value.trim()) { addRecipients(input.value); input.value = ''; }
+                wrap.classList.remove('is-focused');
+            });
+            input.addEventListener('focus', () => wrap.classList.add('is-focused'));
+            input.addEventListener('paste', (e) => {
+                const text = (e.clipboardData || window.clipboardData).getData('text');
+                if (text && /[,;\s]/.test(text)) {
+                    e.preventDefault();
+                    addRecipients(text);
+                }
+            });
+        }
+
+        let composeAttachments = [];
+
+        function _totalAttachmentBytes() {
+            return composeAttachments.reduce((sum, a) => sum + a.size, 0);
+        }
+
+        function renderAttachmentChips() {
+            const wrap = document.getElementById('compose-attachments');
+            wrap.innerHTML = '';
+            composeAttachments.forEach((att, index) => {
+                const chip = document.createElement('span');
+                chip.className = 'chip';
+                const text = document.createElement('span');
+                text.className = 'chip-text';
+                text.textContent = `${att.filename} (${_formatSize(att.size)})`;
+                const remove = document.createElement('button');
+                remove.type = 'button';
+                remove.className = 'chip-remove';
+                remove.innerHTML = '<i class="bi bi-x-lg"></i>';
+                remove.onclick = () => { composeAttachments.splice(index, 1); renderAttachmentChips(); };
+                chip.appendChild(text);
+                chip.appendChild(remove);
+                wrap.appendChild(chip);
+            });
+            const hint = document.getElementById('attachment-hint');
+            hint.textContent = composeAttachments.length
+                ? t('attachmentSummary', { n: composeAttachments.length, size: _formatSize(_totalAttachmentBytes()) })
+                : '';
+        }
+
+        function _readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = String(reader.result || '');
+                    resolve(result.slice(result.indexOf(',') + 1));
+                };
+                reader.onerror = () => reject(new Error('read failed'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function onAttachmentsPicked(input) {
+            const files = Array.from(input.files || []);
+            input.value = '';
+            for (const file of files) {
+                if (file.size > MAX_ATTACHMENT_MB * 1024 * 1024) {
+                    toastError(t('attachmentTooLarge', { name: file.name, max: MAX_ATTACHMENT_MB }));
+                    continue;
+                }
+                if (_totalAttachmentBytes() + file.size > MAX_ATTACHMENT_TOTAL_MB * 1024 * 1024) {
+                    toastError(t('attachmentTotalTooLarge', { max: MAX_ATTACHMENT_TOTAL_MB }));
+                    break;
+                }
+                try {
+                    const content = await _readFileAsBase64(file);
+                    composeAttachments.push({
+                        filename: file.name,
+                        size: file.size,
+                        contentType: file.type || '',
+                        content,
+                    });
+                    renderAttachmentChips();
+                } catch (e) {
+                    toastError(t('attachmentReadFailed', { name: file.name }));
+                }
+            }
+        }
+
+        let draftTimer = null;
+        let composeVisible = false;
+
+        function _composeIsDirty() {
+            const subject = document.getElementById('compose-subject').value.trim();
+            const body = _getQuillEditor().getText().trim();
+            return Boolean(recipients.length || subject || body || composeAttachments.length);
+        }
+
+        function saveDraft() {
+            if (!composeVisible) return;
+            clearTimeout(draftTimer);
+            draftTimer = setTimeout(() => {
+                if (!_composeIsDirty()) { discardDraft(true); return; }
+                try {
+                    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+                        fromPrefix: document.getElementById('compose-from-prefix').value,
+                        fromDomain: document.getElementById('compose-from-domain').value,
+                        recipients,
+                        subject: document.getElementById('compose-subject').value,
+                        html: _getQuillEditor().root.innerHTML,
+                        title: document.getElementById('composeModalLabel').textContent,
+                    }));
+                } catch (e) {}
+            }, 400);
+        }
+
+        function _loadDraft() {
+            try {
+                const raw = localStorage.getItem(DRAFT_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function discardDraft(silent = false) {
+            try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+            if (!silent) document.getElementById('compose-draft-bar').classList.add('d-none');
+        }
+
+        function restoreDraft() {
+            const draft = _loadDraft();
+            if (!draft) return;
+            document.getElementById('compose-from-prefix').value = draft.fromPrefix || '';
+            const domainSel = document.getElementById('compose-from-domain');
+            if (activeDomains.includes(draft.fromDomain)) domainSel.value = draft.fromDomain;
+            setRecipients(draft.recipients || []);
+            document.getElementById('compose-subject').value = draft.subject || '';
+            if (draft.html) _getQuillEditor().clipboard.dangerouslyPasteHTML(draft.html);
+            document.getElementById('compose-draft-bar').classList.add('d-none');
+        }
+
+        function _resetComposeForm() {
+            document.getElementById('compose-from-prefix').value = '';
+            document.getElementById('compose-subject').value = '';
+            setRecipients([]);
+            composeAttachments = [];
+            renderAttachmentChips();
+            composeDriveFiles = [];
+            composeEvent = null;
+            renderComposeExtras();
+            document.getElementById('compose-to-input').value = '';
+            _getQuillEditor().setContents([]);
+            const alert = document.getElementById('compose-alert');
+            alert.style.display = 'none';
+            alert.className = 'alert';
+            document.getElementById('compose-draft-bar').classList.add('d-none');
+            document.getElementById('btn-send-email').disabled = false;
+            document.getElementById('btn-send-email').innerHTML = `<i class="bi bi-send me-1"></i>${t('send')}`;
+            document.getElementById('composeModalLabel').innerHTML = `<i class="bi bi-pencil-square me-2"></i>${t('composeEmail')}`;
+        }
+
+        function _fillComposeSender() {
+            if (!currentEmail) return;
+            const [prefix, domain] = currentEmail.split('@');
+            document.getElementById('compose-from-prefix').value = prefix || '';
+            const domainSel = document.getElementById('compose-from-domain');
+            if (activeDomains.includes(domain)) domainSel.value = domain;
+        }
+
+        function _showCompose() {
+            if (_NO_TRACE) { showToast('Stealth view is read-only. Return to your own account to send mail.'); return; }
+            composeVisible = true;
+            _getComposeModal().show();
+        }
+
+        function tryCloseCompose() {
+            if (!_composeIsDirty()) {
+                _closeCompose(true);
+                return;
+            }
+            showConfirm({
+                title: t('discardTitle'),
+                message: t('discardMsg'),
+                okLabel: t('discardOk'),
+                onConfirm: () => _closeCompose(true),
+            });
+        }
+
+        function _closeCompose(clearDraft) {
+            clearTimeout(draftTimer);
+            composeVisible = false;
+            if (clearDraft) discardDraft(true);
+            _getComposeModal().hide();
+        }
+
+        function openCompose() {
+            _resetComposeForm();
+            _syncComposeDomains();
+            _fillComposeSender();
+            BearerSetup.fillSenderPicker();
+            const draft = _loadDraft();
+            if (draft) {
+                document.getElementById('compose-draft-bar').classList.remove('d-none');
+            }
+            _showCompose();
+        }
+
+        function _quoteOriginal(msg, origSubject) {
+            const origDate = msg.createdAt ? new Date(msg.createdAt).toLocaleString('en-US') : '';
+            const origFrom = msg.from?.address || '';
+            const editor = _getQuillEditor();
+            editor.setContents([]);
+            editor.insertText(0, '\n\n');
+            const quoteStart = editor.getLength();
+            const quoteText = `--- Original Message ---\nFrom: ${origFrom}\nDate: ${origDate}\nSubject: ${origSubject}\n\n${msg.text || ''}`;
+            editor.insertText(quoteStart, quoteText);
+            editor.formatText(quoteStart, quoteText.length, 'color', '#6c757d');
+            editor.setSelection(0, 0);
+        }
+
+        function _openComposeVariant({ iconClass, titleKey, toList, subjectPrefix }) {
+            const msg = window._currentDetailMsg;
+            if (!msg) return;
+
+            _resetComposeForm();
+            _syncComposeDomains();
+            _fillComposeSender();
+            document.getElementById('composeModalLabel').innerHTML = `<i class="bi ${iconClass} me-2"></i>${t(titleKey)}`;
+
+            setRecipients(toList);
+
+            const origSubject = msg.subject || '';
+            document.getElementById('compose-subject').value =
+                origSubject.startsWith(subjectPrefix) ? origSubject : `${subjectPrefix}${origSubject}`;
+
+            _quoteOriginal(msg, origSubject);
+            _showCompose();
+        }
+
+        function openReply() {
+            const msg = window._currentDetailMsg;
+            if (!msg) return;
+            _openComposeVariant({
+                iconClass: 'bi-reply',
+                titleKey: 'replyEmail',
+                toList: [msg.from?.address].filter(Boolean),
+                subjectPrefix: 'Re: ',
+            });
+        }
+
+        function openReplyAll() {
+            const msg = window._currentDetailMsg;
+            if (!msg) return;
+            const self = (currentEmail || '').toLowerCase();
+            const everyone = [msg.from?.address]
+                .concat((msg.to || []).map(_addressText))
+                .concat((msg.cc || []).map(_addressText))
+                .filter(Boolean)
+                .filter(addr => addr.toLowerCase() !== self);
+            _openComposeVariant({
+                iconClass: 'bi-reply-all',
+                titleKey: 'replyAll',
+                toList: everyone,
+                subjectPrefix: 'Re: ',
+            });
+        }
+
+        function openForward() {
+            const msg = window._currentDetailMsg;
+            if (!msg) return;
+            _openComposeVariant({
+                iconClass: 'bi-arrow-right-short',
+                titleKey: 'forwardEmail',
+                toList: [],
+                subjectPrefix: 'Fwd: ',
+            });
+        }
+
+        async function sendEmail() {
+            const alertDiv = document.getElementById('compose-alert');
+            const btn = document.getElementById('btn-send-email');
+            alertDiv.style.display = 'none';
+
+            const fromPrefix = document.getElementById('compose-from-prefix').value.trim();
+            const fromDomain = document.getElementById('compose-from-domain').value;
+            const pending = document.getElementById('compose-to-input');
+            if (pending.value.trim()) { addRecipients(pending.value); pending.value = ''; }
+            const to = recipients.join(',');
+            const subject = document.getElementById('compose-subject').value.trim();
+            const editor = _getQuillEditor();
+            const body = editor.getText().trim();
+            const htmlBody = editor.root.innerHTML;
+
+            if (!fromPrefix || !fromDomain) {
+                alertDiv.className = 'alert alert-danger';
+                alertDiv.textContent = t('fillFrom');
+                alertDiv.style.display = 'block';
+                return;
+            }
+            if (recipients.length === 0) {
+                alertDiv.className = 'alert alert-danger';
+                alertDiv.textContent = t('fillTo');
+                alertDiv.style.display = 'block';
+                return;
+            }
+            if (recipients.some(addr => !EMAIL_RE.test(addr))) {
+                alertDiv.className = 'alert alert-danger';
+                alertDiv.textContent = t('invalidRecipient');
+                alertDiv.style.display = 'block';
+                return;
+            }
+            if (!subject) {
+                alertDiv.className = 'alert alert-danger';
+                alertDiv.textContent = t('fillSubject');
+                alertDiv.style.display = 'block';
+                return;
+            }
+            if (!body) {
+                alertDiv.className = 'alert alert-danger';
+                alertDiv.textContent = t('fillBody');
+                alertDiv.style.display = 'block';
+                return;
+            }
+
+            const fromEmail = `${fromPrefix}@${fromDomain}`;
+
+            btn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${t('sending')}`;
+
+            try {
+                const resp = await fetch('/api/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        from_email: fromEmail,
+                        from_name: fromPrefix,
+                        to: to,
+                        subject: subject,
+                        text: body,
+                        html: htmlBody,
+                        reply_to: fromEmail,
+                        attachments: composeAttachments.map(a => ({
+                            filename: a.filename,
+                            content: a.content,
+                            contentType: a.contentType,
+                        })),
+                        drive_files: composeDriveFiles.map(f => f.id),
+                        event_id: composeEvent ? composeEvent.id : null,
+                    })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    alertDiv.className = 'alert alert-success';
+                    alertDiv.textContent = t('sentSuccess');
+                    alertDiv.style.display = 'block';
+                    btn.innerHTML = `<i class="bi bi-check-lg me-1"></i>${t('sent')}`;
+                    discardDraft(true);
+                    showToast(t('sentSuccess'), { type: 'success' });
+                    setTimeout(() => { _closeCompose(true); }, 2000);
+                } else {
+                    alertDiv.className = 'alert alert-danger';
+                    alertDiv.textContent = data.message || t('sendFailed');
+                    alertDiv.style.display = 'block';
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="bi bi-send me-1"></i>${t('send')}`;
+                }
+            } catch (e) {
+                alertDiv.className = 'alert alert-danger';
+                alertDiv.textContent = t('networkError') + ': ' + e.message;
+                alertDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-send me-1"></i>${t('send')}`;
+            }
+        }
+
+
+        function getSelectedIds() {
+            return Array.from(document.querySelectorAll('.mail-checkbox:checked')).map(cb => cb.value);
+        }
+
+        // ---- A general dialog (Drive, Calendar and the Compose pickers use it) ----
+        let _bmDialog = null;
+        function bmDialog({ title, html, buttons = [], size = '', onShown }) {
+            if (!_bmDialog) _bmDialog = new bootstrap.Modal(document.getElementById('bmDialog'));
+            document.getElementById('bmDialogBox').className = `modal-dialog modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down ${size}`;
+            document.getElementById('bmDialogTitle').textContent = title || '';
+            const body = document.getElementById('bmDialogBody');
+            body.innerHTML = html || '';
+            const footer = document.getElementById('bmDialogFooter');
+            footer.innerHTML = '';
+            footer.classList.toggle('d-none', !buttons.length);
+            const close = () => _bmDialog.hide();
+            buttons.forEach(b => {
+                const el = document.createElement('button');
+                el.type = 'button';
+                el.className = 'btn ' + (b.cls || 'btn-outline-secondary');
+                el.textContent = b.label;
+                el.onclick = async () => {
+                    if (!b.onClick) return close();
+                    el.disabled = true;
+                    try { if ((await b.onClick(body, close)) !== false) close(); } catch (e) { toastError(e.message); } finally { el.disabled = false; }
+                };
+                footer.appendChild(el);
+            });
+            _bmDialog.show();
+            if (onShown) setTimeout(() => onShown(body, close), 50);
+            return { body, close };
+        }
+
+        // Run something once the dialog has finished closing (to open the next dialog or Compose).
+        function bmAfterClose(fn) {
+            const el = document.getElementById('bmDialog');
+            if (!el.classList.contains('show')) { fn(); return; }
+            el.addEventListener('hidden.bs.modal', () => fn(), { once: true });
+        }
+
+        // ---- Compose: files from Drive, links and a calendar invitation ----
+        let composeDriveFiles = [];
+        let composeEvent = null;
+
+        function renderComposeExtras() {
+            const wrap = document.getElementById('compose-extras');
+            wrap.innerHTML = '';
+            const chip = (icon, text, onRemove) => {
+                const c = document.createElement('span');
+                c.className = 'chip';
+                c.innerHTML = `<i class="bi ${icon} me-1"></i><span class="chip-text"></span><button type="button" class="chip-remove" aria-label="Remove"><i class="bi bi-x-lg"></i></button>`;
+                c.querySelector('.chip-text').textContent = text;
+                c.querySelector('button').onclick = onRemove;
+                wrap.appendChild(c);
+            };
+            composeDriveFiles.forEach((f, i) => chip('bi-hdd', `${f.name} (${_formatSize(f.size)})`, () => { composeDriveFiles.splice(i, 1); renderComposeExtras(); }));
+            if (composeEvent) chip('bi-calendar-event', `Invitation: ${composeEvent.title}`, () => { composeEvent = null; renderComposeExtras(); });
+        }
+
+        function composeAddDriveFile(f) {
+            if (!composeDriveFiles.some(x => x.id === f.id)) composeDriveFiles.push({ id: f.id, name: f.name, size: f.size });
+            renderComposeExtras();
+        }
+
+        function composeSetEvent(e) {
+            composeEvent = e ? { id: e.id, title: e.title } : null;
+            renderComposeExtras();
+        }
+
+        function composeInsertLink(url, label) {
+            const editor = _getQuillEditor();
+            const range = editor.getSelection(true) || { index: editor.getLength() };
+            const text = label || url;
+            editor.insertText(range.index, text, 'link', url);
+            editor.insertText(range.index + text.length, ' ');
+            editor.setSelection(range.index + text.length + 1, 0);
+        }
+
+        // The Drive/Calendar of the mailbox that is open (with personal accounts: always your own).
+        function drivePayload(extra = {}) {
+            return (window.BM_USER && BM_USER.kind === 'user') ? extra : { ...extra, email: currentEmail };
+        }
+        function driveQuery(params = {}) {
+            const p = new URLSearchParams(params);
+            if (!(window.BM_USER && BM_USER.kind === 'user') && currentEmail) p.set('email', currentEmail);
+            const q = p.toString();
+            return q ? '?' + q : '';
+        }
+        function driveReady() {
+            return (window.BM_USER && BM_USER.kind === 'user') || !!currentEmail;
+        }
+
+        // ---- Storage used (under Recent) ----
+        async function refreshStorage() {
+            const card = document.getElementById('storage-card');
+            if (!driveReady()) { card.classList.add('d-none'); return; }
+            try {
+                const r = await fetch('/api/storage' + driveQuery());
+                const s = await r.json();
+                if (!s.success) { card.classList.add('d-none'); return; }
+                const pct = s.unlimited ? 0 : Math.min(100, s.percent);
+                const bar = document.getElementById('storage-bar');
+                bar.style.width = (s.unlimited ? 100 : Math.max(pct, 1)) + '%';
+                bar.className = 'progress-bar ' + (s.unlimited ? 'bg-secondary' : pct >= 95 ? 'bg-danger' : pct >= 80 ? 'bg-warning' : '');
+                document.getElementById('storage-text').textContent = s.unlimited
+                    ? `${_formatSize(s.used) || '0 KB'} used` : `${pct}% of ${_formatSize(s.quota)}`;
+                document.getElementById('storage-detail').textContent =
+                    `Mail ${_formatSize(s.mail) || '0 KB'} · Drive ${_formatSize(s.drive) || '0 KB'}${s.full ? ' · Full: uploads are paused' : ''}`;
+                card.classList.remove('d-none');
+            } catch (e) { /* keep the last value */ }
+        }
+
+        // ---- Save a message to Drive / Calendar ----
+        async function saveMessageToDrive(messageId, format, sent = false) {
+            try {
+                const r = await fetch('/api/drive/from-message', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(drivePayload({ message_id: messageId, format, sent })) });
+                const d = await r.json();
+                if (!d.success) throw new Error(d.message || 'Could not save');
+                showToast(`Saved to Drive: ${d.file.folder === '/' ? '' : d.file.folder + '/'}${d.file.name}`, { type: 'success', actionLabel: 'Open Drive', onAction: () => { switchTab('drive'); BearerDrive.open(d.file.folder); } });
+                refreshStorage();
+            } catch (e) { toastError(e.message); }
+        }
+
+        async function saveAttachmentToDrive(messageId, attachmentId) {
+            try {
+                const r = await fetch('/api/drive/from-attachment', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(drivePayload({ message_id: messageId, attachment_id: attachmentId })) });
+                const d = await r.json();
+                if (!d.success) throw new Error(d.message || 'Could not save');
+                showToast(`Saved to Drive: ${d.file.name}`, { type: 'success', actionLabel: 'Open Drive', onAction: () => { switchTab('drive'); BearerDrive.open(d.file.folder); } });
+                refreshStorage();
+            } catch (e) { toastError(e.message); }
+        }
+
+        function _rowCheckbox(id) {
+            return `<div class="form-check me-2 mt-1" onclick="event.stopPropagation()"><input class="form-check-input mail-checkbox" type="checkbox" value="${_escapeHtml(id)}" onchange="updateBatchButtons()" aria-label="Select"></div>`;
+        }
+
+        // The toolbar above the list: the same "select, then act" bar in Inbox, Sent and Trash.
+        const BATCH_ACTIONS = {
+            inbox: [['delete', 'btn-outline-danger', 'bi-trash', 'Delete'], ['mark_read', 'btn-outline-secondary', 'bi-envelope-open', 'Read'],
+                    ['mark_unread', 'btn-outline-secondary', 'bi-envelope', 'Unread']],
+            sent: [['sent_delete', 'btn-outline-danger', 'bi-trash', 'Delete']],
+            trash: [['restore', 'btn-outline-primary', 'bi-arrow-counterclockwise', 'Restore'], ['permanent_delete', 'btn-outline-danger', 'bi-x-circle', 'Delete forever']],
+        };
+
+        function _showBatchBar(show) {
+            const bar = document.getElementById('batch-bar');
+            const actions = BATCH_ACTIONS[currentTab] || [];
+            bar.classList.toggle('d-none', !show || !actions.length || _NO_TRACE);
+            document.getElementById('batch-actions').innerHTML = actions.map(([a, cls, icon, label]) =>
+                `<button type="button" class="btn btn-sm ${cls}" data-batch="${a}" onclick="batchAction('${a}')" disabled><i class="bi ${icon} me-1"></i>${label}</button>`).join('')
+                + (currentTab === 'trash' ? '<button type="button" class="btn btn-sm btn-outline-danger" onclick="emptyTrash()"><i class="bi bi-trash3 me-1"></i>Empty trash</button>' : '');
+            document.getElementById('select-all-checkbox').checked = false;
+            updateBatchButtons();
+        }
+
+        function updateBatchButtons() {
+            const count = getSelectedIds().length;
+            document.querySelectorAll('#batch-actions [data-batch]').forEach(b => { b.disabled = count === 0; });
+            document.getElementById('selected-count').textContent = count > 0 ? t('selected', {n: count}) : '';
+        }
+
+        function toggleSelectAll(checked) {
+            document.querySelectorAll('.mail-checkbox').forEach(cb => { cb.checked = checked; });
+            updateBatchButtons();
+        }
+
+        async function _batchRequest(action, ids) {
+            const resp = await fetch('/api/inbox/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: currentEmail, action, message_ids: ids })
+            });
+            return resp.json();
+        }
+
+        async function _undoBatchDelete(removed) {
+            try {
+                const data = await _batchRequest('restore', removed.map(m => m.id));
+                if (!data.success) {
+                    toastError(t('undoFailed'));
+                    return;
+                }
+                currentMessages = currentMessages.concat(removed)
+                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                renderMessages(currentMessages);
+                showToast(t('mailRestored'), { type: 'success' });
+            } catch (e) {
+                toastError(t('undoFailed'));
+            }
+        }
+
+        async function batchAction(action, idsArg) {
+            const ids = idsArg || getSelectedIds();
+            if (ids.length === 0) return;
+            if (action === 'sent_delete') return deleteSentMessages(ids);
+            if (action === 'permanent_delete' && !idsArg) {
+                return showConfirm({ title: t('permanentDelete'), message: `Delete ${ids.length} message(s) forever? This cannot be undone.`,
+                    okLabel: t('permanentDeleteOk'), onConfirm: () => batchAction('permanent_delete', ids) });
+            }
+            try {
+                const data = await _batchRequest(action, ids);
+                if (!data.success) {
+                    toastError(data.message || t('deleteFailed'));
+                    return;
+                }
+                if (action === 'delete') {
+                    const removed = currentMessages.filter(m => ids.includes(m.id));
+                    currentMessages = currentMessages.filter(m => !ids.includes(m.id));
+                    renderMessages(currentMessages);
+                    resetMailDetail();
+                    showToast(t('mailsDeleted', { n: ids.length }), {
+                        actionLabel: t('undo'),
+                        onAction: () => _undoBatchDelete(removed),
+                    });
+                } else if (action === 'mark_read' || action === 'mark_unread') {
+                    ids.forEach(id => {
+                        const m = currentMessages.find(msg => msg.id === id);
+                        if (m) m.seen = action === 'mark_read';
+                    });
+                    renderMessages(currentMessages);
+                    _updateUnreadBadge();
+                    showToast(action === 'mark_read' ? t('markedRead') : 'Marked as unread', { type: 'success' });
+                } else if (action === 'restore' || action === 'permanent_delete') {
+                    currentTrashMessages = currentTrashMessages.filter(m => !ids.includes(m.id));
+                    currentTrashTotal = Math.max(0, currentTrashTotal - ids.length);
+                    renderTrashMessages(currentTrashMessages);
+                    resetMailDetail();
+                    showToast(action === 'restore' ? t('mailRestored') : `${ids.length} message(s) deleted forever`, { type: 'success' });
+                    if (action === 'restore') currentMessages = [];  // the inbox reloads with them next time
+                }
+            } catch (e) {
+                toastError(t('networkError') + ': ' + e.message);
+            }
+        }
+
+        function emptyTrash() {
+            showConfirm({ title: 'Empty trash?', message: 'Every message in Trash is deleted forever. This cannot be undone.', okLabel: 'Empty trash',
+                onConfirm: async () => {
+                    try {
+                        const data = await _batchRequest('empty_trash', []);
+                        if (!data.success) { toastError(data.message || t('deleteFailed')); return; }
+                        currentTrashMessages = []; currentTrashTotal = 0;
+                        renderTrashMessages([]); resetMailDetail();
+                        showToast(`Trash emptied (${data.count || 0})`, { type: 'success' });
+                    } catch (e) { toastError(t('networkError') + ': ' + e.message); }
+                } });
+        }
+
+        function deleteSentMessages(ids) {
+            showConfirm({ title: 'Delete from Sent?', message: `Remove ${ids.length} message(s) from your Sent list? Mail that was already delivered stays with the recipients.`, okLabel: t('delete'),
+                onConfirm: async () => {
+                    try {
+                        const resp = await fetch('/api/sent/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: currentEmail, message_ids: ids }) });
+                        const data = await resp.json();
+                        if (!data.success) { toastError(data.message || t('deleteFailed')); return; }
+                        currentSentMessages = currentSentMessages.filter(m => !ids.includes(m.id));
+                        currentSentTotal = Math.max(0, currentSentTotal - ids.length);
+                        renderSentMessages(currentSentMessages); resetMailDetail();
+                        showToast(`${ids.length} sent message(s) deleted`, { type: 'success' });
+                    } catch (e) { toastError(t('networkError') + ': ' + e.message); }
+                } });
+        }
+
+        function forwardSent(id) {
+            const msg = currentSentMessages.find(m => m.id === id);
+            if (!msg) return;
+            window._currentDetailMsg = { ...msg, from: { address: msg.from_address || currentEmail }, createdAt: msg.createdAt };
+            openForward();
+        }
+
+        function batchDelete() { return batchAction('delete'); }
+        function batchMarkRead() { return batchAction('mark_read'); }
+
+
+        async function _undoSingleDelete(msg) {
+            try {
+                const resp = await fetch('/api/inbox/restore', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentEmail, message_id: msg.id })
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    toastError(t('undoFailed'));
+                    return;
+                }
+                currentMessages = currentMessages.concat([msg])
+                    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                renderMessages(currentMessages);
+                showToast(t('mailRestored'), { type: 'success' });
+            } catch (e) {
+                toastError(t('undoFailed'));
+            }
+        }
+
+        async function deleteEmail(messageId) {
+            if (!currentEmail) return;
+
+            try {
+                const resp = await fetch('/api/inbox/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: currentEmail,
+                        message_id: messageId,
+                    })
+                });
+                const data = await resp.json();
+
+                if (data.success) {
+                    const removed = currentMessages.find(m => m.id === messageId);
+                    currentMessages = currentMessages.filter(m => m.id !== messageId);
+                    renderMessages(currentMessages);
+                    resetMailDetail();
+                    showToast(t('mailDeleted'), removed ? {
+                        actionLabel: t('undo'),
+                        onAction: () => _undoSingleDelete(removed),
+                    } : {});
+                } else {
+                    toastError(data.message || t('deleteFailed'));
+                }
+            } catch (e) {
+                toastError(t('networkError') + ': ' + e.message);
+            }
+        }
+
+        function restoreEmail(messageId) {
+            if (!currentEmail) return;
+            trashAction('/api/inbox/restore', messageId, t('mailRestored'));
+        }
+
+        function permanentDeleteEmail(messageId) {
+            if (!currentEmail) return;
+            showConfirm({
+                title: t('permanentDelete'),
+                message: t('confirmPermanentDelete'),
+                okLabel: t('permanentDeleteOk'),
+                onConfirm: () => trashAction('/api/inbox/permanent-delete', messageId, t('permanentDelete')),
+            });
+        }
+
+        async function trashAction(url, messageId, okMessage) {
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: currentEmail, message_id: messageId })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    currentTrashMessages = currentTrashMessages.filter(m => m.id !== messageId);
+                    renderTrashMessages(currentTrashMessages);
+                    resetMailDetail();
+                    showToast(okMessage, { type: 'success' });
+                } else {
+                    toastError(data.message || t('deleteFailed'));
+                }
+            } catch (e) {
+                toastError(t('networkError') + ': ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

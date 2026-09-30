@@ -1,0 +1,206 @@
+services:
+  # ---- MongoDB ----
+  mongodb:
+    image: mongo:7
+    container_name: mail-mongodb
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    command: >
+      mongod
+      --wiredTigerCacheSizeGB 0.25
+      --quiet
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mail-net
+
+  # ---- Mail Service (SMTP + REST API) ----
+  mail-service:
+    build: ./mail-service
+    container_name: mail-service
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "25:25"
+      # Sending ports for SMTP keys (Setup > APIs): mail apps sign in here with their own key and
+      # BearerMail relays through your SMTP provider. Set SUBMISSION_BIND=127.0.0.1 in .env to close them.
+      - "${SUBMISSION_BIND:-0.0.0.0}:587:587"
+      - "${SUBMISSION_BIND:-0.0.0.0}:465:465"
+      - "127.0.0.1:8080:8080"
+    expose:
+      - "8080"
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=production
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://127.0.0.1:5000}
+      - ENABLE_API_DOCS=${ENABLE_API_DOCS:-0}
+      - EXPOSE_HEALTH_DETAILS=${EXPOSE_HEALTH_DETAILS:-0}
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW:-60}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX:-60}
+      - SMTP_RCPT_RATE_WINDOW=${SMTP_RCPT_RATE_WINDOW:-60}
+      - SMTP_RCPT_RATE_MAX=${SMTP_RCPT_RATE_MAX:-100}
+      - SMTP_DATA_RATE_WINDOW=${SMTP_DATA_RATE_WINDOW:-60}
+      - SMTP_DATA_RATE_MAX=${SMTP_DATA_RATE_MAX:-20}
+      - SMTP_MAX_RCPTS_PER_MESSAGE=${SMTP_MAX_RCPTS_PER_MESSAGE:-20}
+      - SMTP_MAX_MESSAGE_BYTES=${SMTP_MAX_MESSAGE_BYTES:-1048576}
+      - SMTP_MAX_ADDRESS_LENGTH=${SMTP_MAX_ADDRESS_LENGTH:-320}
+      - SMTP_BLACKLIST_IPS=${SMTP_BLACKLIST_IPS:-}
+      - SMTP_BLACKLIST_SENDERS=${SMTP_BLACKLIST_SENDERS:-}
+      - SMTP_GREYLIST_ENABLED=${SMTP_GREYLIST_ENABLED:-0}
+      - SMTP_GREYLIST_DELAY_SECONDS=${SMTP_GREYLIST_DELAY_SECONDS:-60}
+      - SMTP_GREYLIST_TTL_SECONDS=${SMTP_GREYLIST_TTL_SECONDS:-3600}
+      - SMTP_TLS_CERT=${SMTP_TLS_CERT:-}
+      - SMTP_TLS_KEY=${SMTP_TLS_KEY:-}
+      - CHECK_SENDER_AUTH=${CHECK_SENDER_AUTH:-1}
+      - SMTP_ENFORCE_DMARC_REJECT=${SMTP_ENFORCE_DMARC_REJECT:-0}
+      - SECURITY_LOG_DAYS=${SECURITY_LOG_DAYS:-30}
+      - IMAP_HOSTNAME=${IMAP_HOSTNAME:-}
+      - SUBMISSION_ENABLED=${SUBMISSION_ENABLED:-1}
+      - RELAY_HOURLY_LIMIT=${RELAY_HOURLY_LIMIT:-100}
+      - RELAY_MAX_RCPTS=${RELAY_MAX_RCPTS:-50}
+      # Storage per mailbox (mail + Drive), in MB; 0 = unlimited. Changeable per user under Setup > Users.
+      - DEFAULT_QUOTA_MB=${DEFAULT_QUOTA_MB:-5120}
+      - DRIVE_MAX_FILE_MB=${DRIVE_MAX_FILE_MB:-100}
+      - ATTACH_FROM_DRIVE_MAX_MB=${ATTACH_FROM_DRIVE_MAX_MB:-20}
+    # The same certificate as the IMAP server (port 993). Ports 587/465 need it; to also offer STARTTLS on
+    # port 25, set SMTP_TLS_CERT=/certs/fullchain.pem and SMTP_TLS_KEY=/certs/privkey.pem in .env.
+    volumes:
+      - ${IMAP_CERTS_PATH:-./certs}:/certs:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - mail-net
+
+  # ---- Mail Viewer (Web UI) ----
+  mail-viewer:
+    build: ./mail-viewer
+    container_name: mail-viewer
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-5000}:5000"
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - DUCKMAIL_BASE_URL=http://mail-service:8080
+      - DUCKMAIL_API_KEY=${DUCKMAIL_API_KEY}
+      - ACCESS_PASSWORD=${ACCESS_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - MAX_IMAGE_PROXY_BYTES=${MAX_IMAGE_PROXY_BYTES:-5242880}
+      - AUTO_CREATE_ACCOUNTS=${AUTO_CREATE_ACCOUNTS:-0}
+      - LOGIN_RATE_LIMIT_WINDOW=${LOGIN_RATE_LIMIT_WINDOW:-300}
+      - LOGIN_RATE_LIMIT_MAX=${LOGIN_RATE_LIMIT_MAX:-10}
+      - SENSITIVE_RATE_LIMIT_WINDOW=${SENSITIVE_RATE_LIMIT_WINDOW:-60}
+      - SENSITIVE_RATE_LIMIT_MAX=${SENSITIVE_RATE_LIMIT_MAX:-20}
+      - IMAP_MAIL_BASE_URL=http://imap-mail:3939
+      - DATA_DIR=/data
+      - TRUSTED_PROXY_COUNT=${TRUSTED_PROXY_COUNT:-1}
+      - SESSION_HOURS=${SESSION_HOURS:-168}
+      # Personal-accounts mode: lets ACCESS_PASSWORD sign in as admin (email "admin") if you are locked out
+      - ALLOW_EMERGENCY_ADMIN=${ALLOW_EMERGENCY_ADMIN:-0}
+      # Address used in share links (/s/...). Defaults to CORS_ORIGINS, else the address the browser used.
+      - PUBLIC_URL=${PUBLIC_URL:-${CORS_ORIGINS:-}}
+      - DRIVE_MAX_FILE_MB=${DRIVE_MAX_FILE_MB:-100}
+    volumes:
+      - viewer_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/login', timeout=5).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      mail-service:
+        condition: service_healthy
+      imap-mail:
+        condition: service_started
+    networks:
+      - mail-net
+
+  # ---- IMAP Mail Bridge (Node.js) ----
+  imap-mail:
+    build: ./mail-viewer/imap-mail-app
+    container_name: mail-imap-bridge
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      - PORT=3939
+      - BRIDGE_TOKEN=${DUCKMAIL_API_KEY}
+      - ALLOW_PRIVATE_IMAP_HOSTS=${ALLOW_PRIVATE_IMAP_HOSTS:-0}
+      - ACCOUNTS_FILE=/data/accounts.json
+      - IMAP_ACCOUNT_PERSISTENCE=${IMAP_ACCOUNT_PERSISTENCE:-encrypted}
+      - IMAP_ACCOUNT_ENCRYPTION_KEY=${IMAP_ACCOUNT_ENCRYPTION_KEY:-}
+      - MAIL_SERVICE_URL=http://mail-service:8080
+    volumes:
+      - imap_mail_data:/data
+    expose:
+      - "3939"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3939/api/accounts').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - mail-net
+
+  # ---- IMAP Server (Node.js) ----
+  imap-server:
+    build: ./imap-server
+    container_name: mail-imap-server
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "993:993"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=mailserver
+      - IMAP_PORT=993
+      - TLS_CERT=${IMAP_TLS_CERT:-/certs/fullchain.pem}
+      - TLS_KEY=${IMAP_TLS_KEY:-/certs/privkey.pem}
+      - IMAP_HOSTNAME=${IMAP_HOSTNAME:-}
+      # Connections, logins and failed passwords go to the Security page (Setup > Security)
+      - MAIL_SERVICE_URL=http://mail-service:8080
+      - SECURITY_API_KEY=${API_KEY}
+    volumes:
+      - ${IMAP_CERTS_PATH:-./certs}:/certs:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "const n=require('net');const c=n.connect(993,'127.0.0.1',()=>{c.destroy();process.exit(0)});c.on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - mail-net
+
+volumes:
+  mongo_data:
+  imap_mail_data:
+  viewer_data:
+
+networks:
+  mail-net:
+    driver: bridge

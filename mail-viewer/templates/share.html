@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>{% if info and info.name and not need_password %}{{ info.name }} - {% endif %}BearerMail</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fonts/satisfy.css') }}" rel="stylesheet">
+    <style>
+        :root { --primary: #5b9a8b; --brand: #2a5f8a; --text: #1a2421; --muted: #6b7a76; --card: #ffffff; }
+        @media (prefers-color-scheme: dark) { :root { --text: #e8eeec; --muted: #a2b1ad; --card: #1b2422; } body { background: #111816 !important; } }
+        body { background: linear-gradient(135deg, #ffffff 0%, #f3f8f6 50%, #ffffff 100%); color: var(--text); min-height: 100vh;
+               display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .share-card { width: 100%; max-width: 460px; background: var(--card); border-radius: 18px; padding: clamp(22px, 6vw, 36px);
+                      box-shadow: 0 6px 28px rgba(0, 0, 0, .10); }
+        .brand { font-family: 'Satisfy', cursive; color: var(--brand); font-size: 1.8rem; text-align: center; margin-bottom: 1rem; }
+        .file-icon { font-size: 3rem; color: var(--primary); }
+        .muted { color: var(--muted); }
+        .btn-primary { background: var(--primary); border-color: var(--primary); }
+        .btn-primary:hover { background: #4a8a7b; border-color: #4a8a7b; }
+        .name { word-break: break-word; }
+        .event-date { font-size: 1.05rem; }
+    </style>
+</head>
+<body>
+<main class="share-card">
+    <div class="brand"><i class="bi bi-envelope me-1"></i>BearerMail</div>
+    {% if error and not need_password %}
+        <div class="text-center">
+            <i class="bi bi-link-45deg file-icon" style="opacity:.4"></i>
+            <p class="mt-2 mb-0">{{ error }}</p>
+        </div>
+    {% elif need_password %}
+        <div class="text-center mb-3">
+            <i class="bi bi-lock file-icon"></i>
+            <h1 class="h5 mt-2 mb-1">This link is protected</h1>
+            <p class="muted small mb-0">Shared by {{ info.shared_by }}. Enter the password you were given.</p>
+        </div>
+        {% if error %}<div class="alert alert-danger py-2 small">{{ error }}</div>{% endif %}
+        <form method="post" class="d-flex gap-2">
+            <input type="password" name="password" class="form-control" placeholder="Password" autocomplete="off" autofocus required>
+            <button class="btn btn-primary" type="submit">Open</button>
+        </form>
+    {% elif info.kind == 'file' %}
+        <div class="text-center">
+            <i class="bi bi-file-earmark-arrow-down file-icon"></i>
+            <h1 class="h5 mt-2 mb-1 name">{{ info.name }}</h1>
+            <p class="muted small mb-3" id="size" data-size="{{ info.size }}">Shared by {{ info.shared_by }}</p>
+            <a class="btn btn-primary btn-lg w-100" href="{{ url_for('share_download', code=info.code) }}"><i class="bi bi-download me-2"></i>Download</a>
+            {% if info.expires_at %}<p class="muted small mt-3 mb-0" data-expires="{{ info.expires_at }}">This link expires soon.</p>{% endif %}
+        </div>
+    {% else %}
+        {% set e = info.event %}
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-calendar-event file-icon" style="font-size:2rem"></i>
+                <h1 class="h5 mb-0 name">{{ e.title }}</h1></div>
+            <p class="event-date mb-1" id="when" data-start="{{ e.start }}" data-end="{{ e.end }}" data-allday="{{ '1' if e.all_day else '0' }}"></p>
+            {% if e.location %}<p class="mb-1"><i class="bi bi-geo-alt me-1"></i>{{ e.location }}</p>{% endif %}
+            {% if e.description %}<p class="muted small" style="white-space:pre-wrap">{{ e.description }}</p>{% endif %}
+            <p class="muted small">Shared by {{ info.shared_by }}</p>
+            <a class="btn btn-primary w-100" href="{{ url_for('share_download', code=info.code) }}"><i class="bi bi-calendar-plus me-2"></i>Add to my calendar (.ics)</a>
+        </div>
+    {% endif %}
+</main>
+<script>
+    (function () {
+        const size = document.getElementById('size');
+        if (size) {
+            const n = Number(size.dataset.size) || 0;
+            const text = n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n >= 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' bytes';
+            size.textContent = text + ' · ' + size.textContent;
+        }
+        const exp = document.querySelector('[data-expires]');
+        if (exp) exp.textContent = 'This link works until ' + new Date(exp.dataset.expires).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) + '.';
+        const when = document.getElementById('when');
+        if (when) {
+            const s = new Date(when.dataset.start), e = new Date(when.dataset.end);
+            if (when.dataset.allday === '1') {
+                const opts = { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' };
+                const last = new Date(e.getTime() - 86400000);
+                when.textContent = s.toLocaleDateString([], opts) + (last > s ? ' to ' + last.toLocaleDateString([], opts) : '') + ' (all day)';
+            } else {
+                const same = s.toDateString() === e.toDateString();
+                when.textContent = s.toLocaleString([], { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                    + ' – ' + (same ? e.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
+                                    : e.toLocaleString([], { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }));
+            }
+        }
+    })();
+</script>
+</body>
+</html>
