@@ -11,6 +11,15 @@ Self-hosted email for your own domain.
 - A **storage quota** per mailbox, shown under Recent.
 - See the exact **MX, SPF, DKIM and DMARC** records for each domain on screen, with a **Check DNS** button.
 
+## Side Note:
+- When sending large files by email, keep in mind that most email services have a file-size limit of around 20–25 MB.
+
+Before sending the email, go to Drive and create a folder specifically for the email you’re about to send. Upload all the necessary files into that folder, then click Share and Create link.
+
+Next, compose your email and include the Drive link instead of attaching the files directly. This makes it easier for the recipient to access the content without running into email attachment-size restrictions.
+
+Once the recipient has finished accessing the files, you can delete the folder or set it to automatically expire/delete after a certain period.
+
 ## How it fits together
 
 ```
