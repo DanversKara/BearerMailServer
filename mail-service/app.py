@@ -31,6 +31,7 @@ from aiosmtpd.smtp import SMTP
 
 import bearer_ext
 import calendar_ext
+import ddns_ext
 import dmarc_ext
 import drive_ext
 import mail_auth
@@ -404,8 +405,10 @@ async def lifespan(app):
     start_smtp_server()
     relay_ext.start_submission_servers(SUBMISSION_TLS_CERT, SUBMISSION_TLS_KEY, IMAP_HOSTNAME or SMTP_HOSTNAME,
                                        is_blocked=security_ext.is_blocked)
+    ddns_task = asyncio.create_task(ddns_ext.loop())
     logger.info(f"API server ready on port {API_PORT}")
     yield
+    ddns_task.cancel()
 
 
 app = FastAPI(
@@ -595,6 +598,9 @@ relay_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, hostnam
 drive_ext.configure(get_db=lambda: db, require_api_key=_require_api_key)
 dmarc_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, server_ip=SERVER_IP)
 calendar_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, hostname=SMTP_HOSTNAME)
+ddns_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, env_server_ip=SERVER_IP,
+                   record_event=security_ext.record, encrypt=bearer_ext.encrypt_secret, decrypt=bearer_ext.decrypt_secret,
+                   build_dns_records=bearer_ext.build_dns_records, mail_host_for=bearer_ext.mail_host_for)
 tabs_ext.configure(get_db=lambda: db, get_account=get_current_account, addr_match=_addr_match,
                    record_event=security_ext.record)
 
@@ -669,6 +675,7 @@ app.include_router(drive_ext.router)
 app.include_router(dmarc_ext.router)
 app.include_router(calendar_ext.router)
 app.include_router(tabs_ext.router)
+app.include_router(ddns_ext.router)
 
 
 # ---- Messages ----

@@ -1,5 +1,23 @@
 # BearerMail changes
 
+## Dynamic IP and Cloudflare DNS
+
+- **Setup > Domains & DNS > Dynamic IP & Cloudflare**: paste a Cloudflare API token ("Edit zone DNS" template)
+  and turn on *Watch this server's public IP*. Every few minutes the mail service asks Cloudflare
+  (`1.1.1.1/cdn-cgi/trace`, with `api.ipify.org` as a second opinion; if they disagree nothing changes) for
+  the public IPv4. When it changes it:
+  - updates every Cloudflare A record that pointed at the old IP (proxied ones stay proxied; Tunnel CNAMEs and
+    records pointing elsewhere are never touched),
+  - swaps `ip4:old` for `ip4:new` in SPF records, keeping your other senders (Mailjet, Google...),
+  - uses the new IP on the DNS page, the DNS check and the DMARC page immediately: **no restart needed**,
+    SERVER_IP in .env becomes only the starting value,
+  - logs `ip_changed` / `dns_updated` / `dns_update_failed` under Security (alert emails follow your Security settings).
+- **Check IP & preview** shows exactly what would change; **Update Cloudflare now** does it.
+- **Apply to Cloudflare** on each domain's DNS records creates or fixes A, MX, SPF, DKIM and DMARC there after
+  showing the changes. It never deletes anything, never overwrites an existing DMARC policy, and warns about
+  extra MX records, duplicate SPF records and an orange-cloud (proxied) mail hostname.
+- The token is stored encrypted with SECRETS_KEY. Reverse DNS (PTR) is your internet provider's and can't be set here.
+
 ## Inbox tabs and mail-flood protection
 
 - The inbox is split into tabs like Gmail: **Primary, Favorites, Security, Promotions, Social, Updates,

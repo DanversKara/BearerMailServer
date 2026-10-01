@@ -120,10 +120,11 @@
   /* ---------------------------- domains ---------------------------- */
   function viewDomains(el) {
     if (S.dnsOpen && !S.dnsData[S.dnsOpen]) { const dom = S.dnsOpen; run(() => ensureDns(dom)).then(() => { if (S.tab === 'domains') render(); }); }
-    el.innerHTML = `<div class="row g-2 align-items-end mb-3">
+    el.innerHTML = `<div id="ddns-card"></div><div class="row g-2 align-items-end mb-3">
         <div class="col-md-8"><label class="form-label">Add a domain</label><input id="sd-new" class="form-control" placeholder="example.com"></div>
         <div class="col-md-4"><button class="btn btn-primary w-100" id="sd-add"><i class="bi bi-plus-lg me-1"></i>Add domain</button></div></div>
       ${S.domains.length ? S.domains.map(domainCard).join('') : emptyNote('bi-globe', 'No domains yet. Add the domain you own above.')}`;
+    if (window.BearerDdns) window.BearerDdns.mount(document.getElementById('ddns-card'));
   }
 
   function domainCard(d) {
@@ -165,8 +166,9 @@
         <td data-label="Status">${status(r.id)}</td></tr>`).join('');
     const extra = (data.provider_records || []).map((r) => `<tr><td><b>${esc(r.type)}</b></td><td><span class="dns-value">${esc(r.name)}</span></td><td><span class="dns-value">${esc(r.value)}</span>${copyBtn(r.value, 'Value')}</td><td class="small text-muted">${esc(r.note)}</td><td><button class="btn btn-sm btn-outline-danger" data-delextra="${esc(domain)}|${esc(r.name)}|${esc(r.value)}"><i class="bi bi-x"></i></button></td></tr>`).join('');
     return `<div class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
-        <div class="small text-muted">Add these at your DNS provider (Cloudflare, Namecheap, GoDaddy...). "Host" is the name field; <code>@</code> means the bare domain. ${data.server_ip ? '' : '<b class="text-danger">Set SERVER_IP in .env so the A record and SPF show your real IP.</b>'}</div>
-        <button class="btn btn-sm btn-success" data-checkdns="${esc(domain)}"><i class="bi bi-arrow-repeat me-1"></i>Check DNS now</button></div>
+        <div class="small text-muted">Add these at your DNS provider (Cloudflare, Namecheap, GoDaddy...). "Host" is the name field; <code>@</code> means the bare domain. ${data.server_ip ? '' : '<b class="text-danger">This server\'s IP is unknown: set SERVER_IP in .env, or turn on Dynamic IP above.</b>'}</div>
+        <div class="d-flex gap-2 flex-wrap"><button class="btn btn-sm btn-outline-primary" data-cfpush="${esc(domain)}" title="Create or fix these records at Cloudflare (shows the changes first)"><i class="bi bi-cloud-upload me-1"></i>Apply to Cloudflare</button>
+        <button class="btn btn-sm btn-success" data-checkdns="${esc(domain)}"><i class="bi bi-arrow-repeat me-1"></i>Check DNS now</button></div></div>
       ${data.mail_host_warning ? `<div class="alert alert-warning small">${esc(data.mail_host_warning)}</div>` : ''}
       <div class="row g-2 align-items-end mb-2"><div class="col-md-8"><label class="form-label small mb-1">Mail server name for this domain (MX and A record)</label>
         <div class="input-group input-group-sm"><input class="form-control" data-mailhost-in="${esc(domain)}" value="${esc(data.mail_host !== data.mail_host_default ? data.mail_host : '')}" placeholder="${esc(data.mail_host_default)} (from .env)">

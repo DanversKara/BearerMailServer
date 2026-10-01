@@ -513,3 +513,17 @@ def test_inbox_query_passes_tab(client, viewer, monkeypatch):
     monkeypatch.setattr(viewer.http_session, "get", get)
     client.post("/api/inbox/query", json={"email": "a@test.local", "tab": "security"})
     assert get.call_args[1]["params"]["tab"] == "security"
+
+
+def test_admin_proxy_ddns_routes_keep_query(client, viewer, monkeypatch):
+    login(client)
+    upstream = Mock(status_code=200)
+    upstream.json.return_value = {"ok": True}
+    request = Mock(return_value=upstream)
+    monkeypatch.setattr(viewer.http_session, "request", request)
+    assert client.post("/api/admin/ddns/check?preview=0", json={}).status_code == 200
+    assert request.call_args.args[1].endswith("/admin/ddns/check")
+    assert request.call_args.kwargs["params"]["preview"] == "0"
+    assert client.post("/api/admin/domains/example.org/cloudflare?apply=1", json={}).status_code == 200
+    assert client.patch("/api/admin/ddns", json={"enabled": True}).status_code == 200
+    assert client.get("/api/admin/ddns/other").status_code == 404

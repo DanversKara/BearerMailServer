@@ -40,6 +40,14 @@ def _db():
     return _cfg["get_db"]()
 
 
+def _known_server_ips() -> set:
+    try:
+        import ddns_ext  # noqa: PLC0415
+        return ddns_ext.known_ips()
+    except Exception:
+        return set()
+
+
 def _auth(request: Request):
     _cfg["require_api_key"](request)
 
@@ -230,7 +238,7 @@ def _name_of(ip: str) -> tuple[str, str]:
     except Exception:
         host = ""
     friendly = next((n for suffix, n in _KNOWN if host.endswith(suffix)), "")
-    if ip and ip == _cfg["server_ip"]:
+    if ip and (ip == _cfg["server_ip"] or ip in _known_server_ips()):
         friendly = "This server"
     if len(_ptr_cache) > 5000:
         _ptr_cache.clear()

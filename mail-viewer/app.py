@@ -2155,7 +2155,8 @@ _ADMIN_PROXY_ALLOWED = re.compile(
     r"|blocklist|blocklist/[0-9a-fA-F.:]+(/[0-9]{1,3})?)"
     r"|relay-keys|relay-keys/revoke-all|relay-keys/[0-9a-f]{24}(/revoke)?"
     r"|users/[^/]+/app-passwords|users/[^/]+/app-passwords/[0-9a-f]{24}/revoke"
-    r"|dmarc/summary|dmarc/reports|dmarc/import)$"
+    r"|dmarc/summary|dmarc/reports|dmarc/import"
+    r"|ddns|ddns/check|domains/[^/]+/cloudflare)$"
 )
 
 
@@ -2186,10 +2187,10 @@ def admin_proxy(subpath):
         resp = http_session.request(
             request.method,
             f"{base_url}/admin/{quote(subpath, safe='/@')}",
-            params=request.args if request.method == "GET" else None,
+            params=request.args or None,
             json=body,
             headers={"Authorization": f"Bearer {DUCKMAIL_API_KEY}"},
-            timeout=60,
+            timeout=90,
         )
     except Exception as e:
         app.logger.error(f"Admin proxy failed: {e}", exc_info=True)

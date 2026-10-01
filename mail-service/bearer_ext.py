@@ -432,6 +432,13 @@ def update_domain(domain: str, body: dict = Body(...)):
 # ---------------------------------------------------------------------------
 
 def _server_ip() -> str:
+    # The dynamic-IP checker (ddns_ext) keeps the live address in settings; SERVER_IP from .env is the start value.
+    try:
+        live = _db().settings.find_one({"_id": "ddns"}, {"ip": 1, "enabled": 1}) or {}
+        if live.get("enabled") and live.get("ip"):
+            return live["ip"]
+    except Exception:
+        pass
     if _cfg.server_ip:
         return _cfg.server_ip
     try:

@@ -131,6 +131,9 @@ EVENT_KINDS = {
         "alert_sent": ("info", "Alert email sent"),
         "alert_failed": ("warn", "Alert email could not be sent"),
         "dmarc_failures": ("warn", "A DMARC report shows mail as your domain that failed the checks"),
+        "ip_changed": ("warn", "This server's public IP address changed"),
+        "dns_updated": ("info", "DNS records updated at Cloudflare"),
+        "dns_update_failed": ("warn", "DNS records could not be updated at Cloudflare"),
     },
 }
 

@@ -281,6 +281,22 @@ how much is used (yellow above 80 %, red above 95 %). When it is full, uploads a
 still accepted**. Admins change the quota per person under Setup > Users > Manage > *Storage (MB)* (empty = the default,
 `0` = unlimited).
 
+### Dynamic IP (home internet) with Cloudflare
+
+If your public IP can change, open **Setup > Domains & DNS > Dynamic IP & Cloudflare**:
+
+1. At Cloudflare: **My Profile > API Tokens > Create Token > "Edit zone DNS"** template, pick your zone(s)
+   (it needs *Zone · DNS · Edit* and *Zone · Zone · Read*), create it and copy the token.
+2. Paste it, press **Save**, and turn on **Watch this server's public IP** (and *Update Cloudflare automatically*).
+3. Press **Check IP & preview** to see what it would change, or **Update Cloudflare now**.
+
+From then on, an IP change updates the A records that pointed at the old IP and the `ip4:` part of SPF at
+Cloudflare, and the DNS page shows the new IP at once. Nothing needs restarting. Each domain's DNS records
+also get an **Apply to Cloudflare** button that creates or fixes A, MX, SPF, DKIM and DMARC for you.
+
+Keep the mail hostname (e.g. `mail.yourdomain`) as **DNS only** (grey cloud): mail can't pass through
+Cloudflare's proxy. Your web address can stay on a Cloudflare Tunnel.
+
 ## 8. Inbox tabs and flood protection
 
 The inbox is sorted into tabs: **Primary, Favorites, Security, Promotions, Social, Updates, Forums, Work,
