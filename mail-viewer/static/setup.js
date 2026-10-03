@@ -329,10 +329,15 @@
         <div class="d-flex gap-2"><input type="file" class="form-control form-control-sm" data-logo-file="${id}" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml">
           <button class="btn btn-primary btn-sm" data-logo-upload="${id}"><i class="bi bi-upload"></i></button>
           ${have[id] ? `<button class="btn btn-outline-danger btn-sm" data-logo-remove="${id}"><i class="bi bi-trash"></i></button>` : ''}</div></div></div>`;
-    el.innerHTML = `<h5 class="mb-1">Theme</h5><p class="text-muted small">Saved in this browser. The login page has its own colour dots in the top right corner.</p>
-      <div class="theme-grid mb-4">${themes.map((t) => `<button type="button" class="theme-card${t.id === cur ? ' active' : ''}" data-theme-pick="${esc(t.id)}">
-        <div class="theme-swatch" style="background:linear-gradient(90deg, ${esc(t.swatch[0])} 0 60%, ${esc(t.swatch[1])} 60% 100%)"></div>
-        <div class="small fw-semibold">${esc(t.name)}</div></button>`).join('')}</div>
+    el.innerHTML = `<h5 class="mb-1">Theme</h5><p class="text-muted small">Saved in this browser. The sign-in page has its own theme menu in the top right corner.</p>
+      ${[['light', 'Light'], ['dark', 'Dark'], ['animated', 'Animated']].map(([g, title]) => {
+        const list = themes.filter((t) => (t.group || (t.dark ? 'dark' : 'light')) === g);
+        if (!list.length) return '';
+        return `<div class="theme-group-title">${title}${g === 'animated' ? ' <span class="fw-normal text-lowercase">(moving background; it stays still if your device asks for reduced motion)</span>' : ''}</div>
+          <div class="theme-grid mb-3">${list.map((t) => `<button type="button" class="theme-card${t.id === cur ? ' active' : ''}" data-theme-pick="${esc(t.id)}">
+            <div class="theme-swatch${t.animated ? ' anim' : ''}" style="background:${t.animated ? `linear-gradient(120deg, ${t.swatch.map(esc).join(', ')}, ${esc(t.swatch[0])})` : `linear-gradient(90deg, ${esc(t.swatch[0])} 0 60%, ${esc(t.swatch[1])} 60% 100%)`}"></div>
+            <div class="small fw-semibold">${t.animated ? '<i class="bi bi-stars me-1"></i>' : ''}${esc(t.name)}</div></button>`).join('')}</div>`;
+      }).join('')}<div class="mb-4"></div>
       ${isAdmin() ? `<h5 class="mb-1">Logos</h5>
       <p class="text-muted small">A logo replaces the "BearerMail" text. Upload one for each place and theme so it never looks off: for example a light-coloured logo for dark themes. Any slot you leave empty falls back to the closest logo you did upload. PNG, JPG, WebP, GIF or SVG, up to 512 KB; about 40 to 50 px tall works best. Shared by everyone who signs in.</p>
       <div class="row g-3 mb-4">${LOGO_SLOTS.map(slot).join('')}</div>` : ''}

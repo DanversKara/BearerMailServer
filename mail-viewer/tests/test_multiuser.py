@@ -49,7 +49,7 @@ class FakeService:
     def profile(self, address):
         u = self.users[address]
         return {"address": address, "role": u["role"], "addresses": u["addresses"], "permissions": u["permissions"],
-                "is_active": u.get("is_active", True), "two_factor": False}
+                "is_active": u.get("is_active", True), "two_factor": False, "session_days": u.get("session_days")}
 
 
 @pytest.fixture
@@ -357,6 +357,31 @@ def test_upload_is_streamed_to_the_mail_service(viewer, monkeypatch):
     assert big.status_code == 413
 
 
+def test_upload_in_parts_goes_to_your_own_drive(viewer, svc, monkeypatch):
+    c, _ = sign_in(viewer, "jane@x.test", "jane-pass-123")
+    c.post("/api/drive/uploads", json={"email": "boss@x.test", "name": "big.iso", "folder": "/", "size": 5, "evil": 1})
+    method, path, body = svc.calls[-1]
+    assert method == "POST" and "jane" in path and path.endswith("/uploads") and body == {"name": "big.iso", "folder": "/", "size": 5, "content_type": None}
+    seen = {}
+
+    def fake_put(url, params=None, data=None, headers=None, timeout=None):
+        seen.update(url=url, params=params, body=data)
+        r = Mock(status_code=200)
+        r.json.return_value = {"received": len(data), "parts": 1}
+        return r
+
+    monkeypatch.setattr(viewer.internal_http, "put", fake_put)
+    r = c.put("/api/drive/uploads/abc123?part=0", data=b"hello", headers={"Content-Type": "application/octet-stream"})
+    assert r.status_code == 200 and r.get_json()["received"] == 5
+    assert "jane" in seen["url"] and seen["url"].endswith("/uploads/abc123") and seen["params"]["part"] == "0" and seen["body"] == b"hello"
+    monkeypatch.setattr(viewer, "DRIVE_UPLOAD_PART_MB", 0)
+    assert c.put("/api/drive/uploads/abc123?part=1", data=b"x" * 10).status_code == 413
+    c.post("/api/drive/uploads/abc123/finish", json={})
+    assert svc.calls[-1][1].endswith("/uploads/abc123/finish")
+    c.delete("/api/drive/uploads/abc123")
+    assert svc.calls[-1][0] == "DELETE"
+
+
 def _share_svc(password=None, kind="file"):
     def fake(method, path, **kw):
         r = Mock(status_code=200)
@@ -447,3 +472,26 @@ def test_share_link_uses_the_domains_web_address(viewer, svc, monkeypatch):
 
     monkeypatch.setattr(viewer, "_svc", fake)
     assert c.post("/api/drive/shares", json={"kind": "file", "target_id": "a" * 24, "domain": "new.test"}).get_json()["url"] == "https://mail.new.test/s/Zz12Zz12"
+
+
+
+def test_stay_signed_in_is_per_person_and_slides(viewer, svc, monkeypatch):
+    import time as _time
+    svc.users["jane@x.test"]["session_days"] = 30
+    c, _ = sign_in(viewer, "jane@x.test", "jane-pass-123")
+    with c.session_transaction() as sess_data:
+        sid = sess_data["sid"]
+    info = viewer.security_store.read()["sessions"][sid]
+    assert info["ttl"] == 30 * 86400
+    # Active use keeps it alive past the old fixed 7-day limit; 31 idle days end it.
+    now = _time.time()
+    monkeypatch.setattr(viewer.sec.time, "time", lambda: now + 20 * 86400)
+    assert viewer.security_store.session_valid(sid)
+    monkeypatch.setattr(viewer.sec.time, "time", lambda: now + 31 * 86400)
+    assert not viewer.security_store.session_valid(sid)
+    monkeypatch.setattr(viewer.sec.time, "time", lambda: now)
+    # The admin changes it: the running session follows on the next request
+    svc.users["jane@x.test"]["session_days"] = 1
+    viewer._user_cache.clear()
+    assert c.get("/api/me").status_code == 200
+    assert viewer.security_store.read()["sessions"][sid]["ttl"] == 86400

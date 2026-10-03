@@ -161,6 +161,10 @@ def _addresses_for(address: str) -> list:
     return [address] + aliases
 
 
+# "Stay signed in" choices (days without activity before the web app asks for the password again)
+SESSION_DAY_CHOICES = (1, 3, 7, 14, 30, 90, 180, 365)
+
+
 def public_user(acc: dict, with_addresses: bool = False) -> dict:
     totp = acc.get("totp") or {}
     out = {
@@ -172,6 +176,9 @@ def public_user(acc: dict, with_addresses: bool = False) -> dict:
         "two_factor": bool(totp.get("enabled")),
         "app_passwords_only": bool(acc.get("app_passwords_only")),
         "quota_mb": acc.get("quota_mb") if isinstance(acc.get("quota_mb"), int) else None,
+        "session_days": acc.get("session_days") if acc.get("session_days") in SESSION_DAY_CHOICES else None,
+        "drive_quota_mb": acc.get("drive_quota_mb") if isinstance(acc.get("drive_quota_mb"), int) else None,
+        "mail_quota_mb": acc.get("mail_quota_mb") if isinstance(acc.get("mail_quota_mb"), int) else None,
         "recovery_codes_left": len(totp.get("recovery", [])) if totp.get("enabled") else 0,
         "last_login": _iso(acc.get("last_login")),
         "created_at": _iso(acc.get("created_at")),
@@ -268,6 +275,24 @@ def update_user(address: str, body: dict = Body(...)):
             updates["quota_mb"] = q
     if "app_passwords_only" in body:
         updates["app_passwords_only"] = bool(body["app_passwords_only"])
+    # Separate Drive / mailbox limits on top of the total (empty = only the total applies).
+    for field, low, label in (("drive_quota_mb", 0, "The Drive limit"), ("mail_quota_mb", 1, "The mailbox limit")):
+        if field in body:
+            v = body[field]
+            if v is None or v == "":
+                db.accounts.update_one({"_id": acc["_id"]}, {"$unset": {field: ""}})
+            elif not isinstance(v, int) or isinstance(v, bool) or not low <= v <= 10_000_000:
+                raise HTTPException(status_code=422, detail=f"{label} must be a number of MB" + (" (0 = no Drive)" if low == 0 else ""))
+            else:
+                updates[field] = v
+    if "session_days" in body:
+        days = body["session_days"]
+        if days in (None, "", 0):
+            db.accounts.update_one({"_id": acc["_id"]}, {"$unset": {"session_days": ""}})
+        elif days in SESSION_DAY_CHOICES:
+            updates["session_days"] = days
+        else:
+            raise HTTPException(status_code=422, detail="Stay signed in must be one of " + ", ".join(map(str, SESSION_DAY_CHOICES)) + " days")
     if body.get("reset_two_factor"):
         updates["totp"] = {"enabled": False}
     db.accounts.update_one({"_id": acc["_id"]}, {"$set": updates})

@@ -136,7 +136,13 @@
           <div class="form-check form-switch mb-2"><input class="form-check-input" type="checkbox" data-u-apponly${u.app_passwords_only ? ' checked' : ''}><label class="form-check-label small">Mail apps: app passwords only (their mailbox password stops working in mail apps)</label></div>
           <div class="user-perms mb-2">${PERMS.map(([k, label]) => `<div class="form-check form-switch"><input class="form-check-input" type="checkbox" data-u-perm="${k}"${u.permissions[k] ? ' checked' : ''}${isAdmin ? ' disabled' : ''}><label class="form-check-label small">${label}</label></div>`).join('')}</div>
           <div class="row g-2 mb-2">
-            <div class="col-sm-4"><label class="form-label small mb-1">Storage (MB)</label><input type="number" min="0" class="form-control form-control-sm" data-u-quota value="${u.quota_mb == null ? '' : esc(u.quota_mb)}" placeholder="default ${esc(users.default_quota_mb)}" title="Mail + Drive. Empty = the default, 0 = unlimited"></div>
+            <div class="col-sm-4"><label class="form-label small mb-1">Total storage (MB)</label><input type="number" min="0" class="form-control form-control-sm" data-u-quota value="${u.quota_mb == null ? '' : esc(u.quota_mb)}" placeholder="default ${esc(users.default_quota_mb)}" title="Mail + Drive together. Empty = the default, 0 = unlimited"></div>
+            <div class="col-sm-4"><label class="form-label small mb-1">Drive limit (MB)</label><input type="number" min="0" class="form-control form-control-sm" data-u-drivequota value="${u.drive_quota_mb == null ? '' : esc(u.drive_quota_mb)}" placeholder="no separate limit" title="Most Drive files can take. Empty = only the total applies, 0 = no Drive"></div>
+            <div class="col-sm-4"><label class="form-label small mb-1">Mailbox limit (MB)</label><input type="number" min="1" class="form-control form-control-sm" data-u-mailquota value="${u.mail_quota_mb == null ? '' : esc(u.mail_quota_mb)}" placeholder="no separate limit" title="When reached, new mail is refused (senders get a 'mailbox full' bounce). Empty = no mailbox limit"></div>
+            <div class="col-12 small text-muted">Drive and mailbox limits are optional caps inside the total. Empty Drive limit = only the total applies; <b>0</b> = no Drive.
+              A full mailbox <b>refuses new mail</b> (senders get a "mailbox full" bounce), so set that one generously.</div>
+            <div class="col-sm-4"><label class="form-label small mb-1">Stay signed in</label><select class="form-select form-select-sm" data-u-session title="How long the web app keeps them signed in without being used">
+              ${sessionOptions(u.session_days, users.session_hours)}</select></div>
             <div class="col-sm-4"><label class="form-label small mb-1">Most aliases</label><input type="number" min="0" max="10000" class="form-control form-control-sm" data-u-max value="${esc(u.permissions.max_aliases)}"${isAdmin ? ' disabled' : ''}></div>
             <div class="col-12"><label class="form-label small mb-1">May send through (shared providers)</label>${providerChecks(u)}</div>
             <div class="col-12"><label class="form-label small mb-1">Domains they may use (aliases, share links)</label>${domainChecks(u)}</div>
@@ -166,6 +172,15 @@
         </div></div></div>`;
   }
 
+  const SESSION_DAYS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [90, '3 months'], [180, '6 months'], [365, '1 year']];
+  function sessionOptions(days, defaultHours) {
+    const h = +defaultHours || 168;
+    const def = h % 24 ? `${h} hours` : `${h / 24} day${h === 24 ? '' : 's'}`;
+    return `<option value="">Default (${esc(def)})</option>` + SESSION_DAYS.map(([d, label]) => `<option value="${d}"${days === d ? ' selected' : ''}>${label}</option>`).join('');
+  }
+
+  const numOrNull = (el) => { if (!el) return null; const v = el.value.trim(); return v === '' ? null : parseInt(v, 10); };
+
   function cardValues(card) {
     const q = (sel) => card.querySelector(sel);
     const perms = {};
@@ -179,6 +194,9 @@
     const quota = q('[data-u-quota]') ? q('[data-u-quota]').value.trim() : '';
     return { display_name: q('[data-u-name]').value.trim(), role: q('[data-u-role]').value, permissions: perms,
       quota_mb: quota === '' ? null : parseInt(quota, 10),
+      drive_quota_mb: numOrNull(q('[data-u-drivequota]')),
+      mail_quota_mb: numOrNull(q('[data-u-mailquota]')),
+      session_days: q('[data-u-session]') && q('[data-u-session]').value ? parseInt(q('[data-u-session]').value, 10) : null,
       app_passwords_only: !!(q('[data-u-apponly]') && q('[data-u-apponly]').checked) };
   }
 

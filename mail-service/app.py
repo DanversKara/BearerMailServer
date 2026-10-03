@@ -1222,6 +1222,15 @@ class MailHandler:
             return f"550 Domain {domain} not accepted here"
         if bearer_ext.is_disabled_alias(addr):
             return "550 5.1.1 Mailbox unavailable"
+        # A mailbox the admin gave a mailbox limit refuses new mail once full (the sender gets a "mailbox full" bounce).
+        try:
+            for target in dict.fromkeys([addr, *bearer_ext.expand_recipient(addr)]):
+                acc = db.accounts.find_one({"address": target, "mail_quota_mb": {"$gt": 0}})
+                if acc and drive_ext.mail_full(acc):
+                    security_ext.record("smtp", "mailbox_full", ip=client_ip, detail=f"{mail_from} -> {addr}"[:200])
+                    return "552 5.2.2 Mailbox full"
+        except Exception as exc:
+            logger.warning(f"Mailbox limit check skipped: {exc}")
         envelope.rcpt_tos.append(addr)
         session.rcpt_count = current_rcpt_count + 1
         return "250 OK"

@@ -224,6 +224,9 @@
                 min-height: 0;
                 overflow: hidden;
                 align-items: stretch;
+                /* Columns sit side by side here: the row's vertical gutter would push them 24px past the
+                   bottom of the window and cut off the last card. */
+                --bs-gutter-y: 0;
             }
             .mail-col {
                 display: flex;
@@ -251,7 +254,7 @@
                 display: flex;
                 flex-direction: column;
                 gap: 1rem;
-                padding: 0 2px 0 0;
+                padding: 0 2px 4px 0;
                 overflow-y: auto;
                 overscroll-behavior: contain;
             }
@@ -712,9 +715,6 @@
 
             <div class="d-flex align-items-center gap-2 flex-shrink-0">
                 <span class="bm-me-chip d-none d-lg-inline-flex" id="me-chip" title="Signed in as"></span>
-                <button class="btn btn-sm btn-outline-secondary d-none d-lg-inline-flex align-items-center gap-1 bm-settings-btn" onclick="openSettingsPage()" id="btn-settings" title="Settings" aria-label="Settings">
-                    <i class="bi bi-gear"></i><span class="d-none d-xl-inline">Settings</span>
-                </button>
                 <form method="post" action="{{ url_for('logout') }}" class="m-0 d-none d-lg-block">
                     <button type="submit" class="btn btn-sm btn-outline-secondary" title="Log out" aria-label="Log out"><i class="bi bi-box-arrow-right"></i></button>
                 </form>
@@ -724,7 +724,6 @@
                         <li><button class="dropdown-item" type="button" onclick="refreshCurrentTab()"><i class="bi bi-arrow-clockwise me-2"></i>Refresh</button></li>
                         <li><button class="dropdown-item" type="button" onclick="switchTab('trash')"><i class="bi bi-trash me-2"></i>Trash</button></li>
                         <li class="bm-need-external"><button class="dropdown-item" type="button" onclick="switchTab('imap')"><i class="bi bi-diagram-3 me-2"></i>External accounts</button></li>
-                        <li><button class="dropdown-item" type="button" onclick="openSettingsPage()"><i class="bi bi-gear me-2"></i>Settings</button></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><form method="post" action="{{ url_for('logout') }}" class="m-0"><button type="submit" class="dropdown-item text-danger"><i class="bi bi-box-arrow-right me-2"></i>Sign out</button></form></li>
                     </ul>
@@ -763,6 +762,15 @@
                     <button type="button" class="btn btn-primary bm-compose-big d-none d-lg-flex" onclick="openCompose()">
                         <i class="bi bi-pencil-square"></i><span data-i18n="compose">Compose</span>
                     </button>
+                    <div class="card tabs-card d-none" id="tabs-card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-folder2-open me-2"></i>Inbox tabs</span>
+                            <button class="btn btn-sm btn-outline-secondary" id="tabs-card-manage" title="Manage tabs and sorting rules" aria-label="Manage tabs"><i class="bi bi-gear"></i></button>
+                        </div>
+                        <div class="card-body p-1"><div id="tabs-card-list" class="tabs-side"></div>
+                            <div class="tabs-side-hint">Drag tabs to reorder · drop an email on a tab to move it</div></div>
+                    </div>
+
                     <div class="card mail-query-card bm-admin-only bm-single-only">
                         <div class="card-header">
                             <i class="bi bi-search me-2"></i><span data-i18n="queryInbox">Query Inbox</span>
@@ -1597,7 +1605,12 @@
             }
             if (!chip || !window.BM_USER || BM_USER.mode !== 'multi') return;
             const who = BM_USER.address || 'Emergency admin';
-            chip.innerHTML = `<i class="bi bi-person-circle"></i><span class="text-truncate">${_escapeHtml(who)}</span>${BM_USER.role === 'admin' ? '<span class="badge text-bg-secondary">admin</span>' : ''}`;
+            // Only the name before @ may shorten ("jo…@bearermail.com"); the domain is always shown in full.
+            const at = who.lastIndexOf('@');
+            const local = at > 0 ? who.slice(0, at) : who;
+            const domain = at > 0 ? who.slice(at) : '';
+            chip.title = 'Signed in as ' + who;
+            chip.innerHTML = `<i class="bi bi-person-circle"></i><span class="bm-me-addr"><span class="bm-me-local">${_escapeHtml(local)}</span><span class="bm-me-domain">${_escapeHtml(domain)}</span></span>${BM_USER.role === 'admin' ? '<span class="badge text-bg-secondary">admin</span>' : ''}`;
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -2078,7 +2091,7 @@
             }
             
             mailList.innerHTML = messages.map(msg => `
-                <div class="card mb-2 mail-item ${msg.seen ? '' : 'mail-unread'}" data-msg-id="${msg.id}">
+                <div class="card mb-2 mail-item ${msg.seen ? '' : 'mail-unread'}" data-msg-id="${msg.id}"${_NO_TRACE ? '' : ` draggable="true" ondragstart="BearerTabs.dragMail(event, '${msg.id}')" ondragend="BearerTabs.dragEnd()"`}>
                     <div class="card-body py-2">
                         <div class="d-flex align-items-start">
                             ${_rowCheckbox(msg.id)}
@@ -2989,8 +3002,16 @@
                 bar.className = 'progress-bar ' + (s.unlimited ? 'bg-secondary' : pct >= 95 ? 'bg-danger' : pct >= 80 ? 'bg-warning' : '');
                 document.getElementById('storage-text').textContent = s.unlimited
                     ? `${_formatSize(s.used) || '0 KB'} used` : `${pct}% of ${_formatSize(s.quota)}`;
+                // Separate limits (set by the admin) show as "Mail 1.2 GB of 2 GB" / "Drive off".
+                const part = (label, used, limit) => limit === 0 ? `${label} off`
+                    : limit ? `${label} ${_formatSize(used) || '0 KB'} of ${_formatSize(limit)}` : `${label} ${_formatSize(used) || '0 KB'}`;
+                const notes = [];
+                if (s.full) notes.push('Full: uploads are paused');
+                if (s.mail_full) notes.push('Mailbox full: new mail is refused');
+                else if (s.drive_full && s.drive_quota) notes.push('Drive full');
                 document.getElementById('storage-detail').textContent =
-                    `Mail ${_formatSize(s.mail) || '0 KB'} · Drive ${_formatSize(s.drive) || '0 KB'}${s.full ? ' · Full: uploads are paused' : ''}`;
+                    `${part('Mail', s.mail, s.mail_quota)} · ${part('Drive', s.drive, s.drive_quota)}${notes.length ? ' · ' + notes.join(' · ') : ''}`;
+                document.getElementById('storage-detail').classList.toggle('text-danger', !!(s.mail_full || s.full));
                 card.classList.remove('d-none');
             } catch (e) { /* keep the last value */ }
         }

@@ -25,7 +25,8 @@ app.secret_key = os.getenv("SECRET_KEY", "mail-viewer-secret-key-change-me")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").strip().lower()
 IS_PRODUCTION = ENVIRONMENT == "production"
 app.config.update(
-    PERMANENT_SESSION_LIFETIME=int(os.getenv("SESSION_HOURS", "168")) * 3600,
+    # The cookie may live up to a year; the server decides when a sign-in ends (see _session_ttl).
+    PERMANENT_SESSION_LIFETIME=366 * 24 * 3600,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Strict",
     SESSION_COOKIE_SECURE=IS_PRODUCTION,
@@ -197,15 +198,29 @@ def admin_required(f):
     return login_required(decorated_function)
 
 
+SESSION_DAY_CHOICES = (1, 3, 7, 14, 30, 90, 180, 365)
+
+
+def _session_ttl(user: dict | None) -> int:
+    """How long a sign-in lasts without activity: the person's own setting, else SESSION_HOURS."""
+    days = (user or {}).get("session_days")
+    if isinstance(days, int) and days in SESSION_DAY_CHOICES:
+        return days * 86400
+    return SESSION_HOURS * 3600
+
+
 def _session_ok() -> bool:
     if not session.get("authenticated"):
         return False
     sid = session.get("sid", "")
     if not security_store.session_valid(sid):
         return False
-    if current_user() is None:
+    user = current_user()
+    if user is None:
         return False
     try:
+        if not session.get("stealth"):
+            security_store.set_session_ttl(sid, _session_ttl(user))  # follows changes to "Stay signed in"
         security_store.touch_session(sid, _client_ip())
     except OSError:
         pass
@@ -308,7 +323,8 @@ def current_user() -> dict | None:
                 user = {"kind": "user", "address": profile["address"], "role": profile.get("role", "user"),
                         "permissions": profile.get("permissions", {}), "addresses": [a.lower() for a in profile.get("addresses", [])],
                         "display_name": profile.get("display_name", ""), "two_factor": profile.get("two_factor", False),
-                        "domains": [d.lower() for d in profile.get("domains", [])]}
+                        "domains": [d.lower() for d in profile.get("domains", [])],
+                        "session_days": profile.get("session_days")}
                 if stealth:
                     user["stealth"] = True
                     user["impersonator"] = stealth.get("user") or "emergency admin"
@@ -1023,7 +1039,9 @@ def _start_session(method: str, kind: str = "single", user: str = ""):
     session["kind"] = kind
     if user:
         session["user"] = user
-    session["sid"] = security_store.create_session(_client_ip(), _user_agent_label(), method, user=user or ("emergency admin" if kind == "emergency" else ""))
+    profile = _load_user(user, force=True) if user and kind == "user" else None
+    session["sid"] = security_store.create_session(_client_ip(), _user_agent_label(), method, user=user or ("emergency admin" if kind == "emergency" else ""),
+                                                   ttl=_session_ttl(profile))
     session.permanent = True
     security_reporter.report("login_ok", ip=_client_ip(), user=user, detail=_user_agent_label(), aggregate=False)
     if user:
@@ -1729,7 +1747,7 @@ def inbox_tabs_settings():
     if _check_viewer_rate_limit("mail_mutation", SENSITIVE_RATE_LIMIT_WINDOW, SENSITIVE_RATE_LIMIT_MAX):
         return _rate_limited_json()
     data = request.get_json(silent=True) or {}
-    keys = ("enabled", "hidden", "add_tab", "rename_tab", "remove_tab", "remove_rule")
+    keys = ("enabled", "hidden", "order", "add_tab", "rename_tab", "remove_tab", "remove_rule")
     return _tabs_call("/messages/tabs/settings", "POST", {k: data[k] for k in keys if k in data})
 
 
@@ -2546,7 +2564,14 @@ def me_connect_info():
 @app.route("/api/users", methods=["GET"])
 @admin_required
 def users_list():
-    return _svc_json("GET", "/admin/users")
+    resp = _svc_json("GET", "/admin/users")
+    if isinstance(resp, tuple):  # an error answer
+        return resp
+    if resp.status_code == 200 and resp.is_json:
+        data = resp.get_json()
+        data["session_hours"] = SESSION_HOURS  # the "Default" in Stay signed in
+        return jsonify(data)
+    return resp
 
 
 @app.route("/api/users/<address>", methods=["PATCH"])
@@ -2554,7 +2579,7 @@ def users_list():
 def users_update(address):
     result = _svc_json("PATCH", f"/admin/users/{_seg(address)}", request.get_json(silent=True) or {})
     _user_cache.pop(address.strip().lower(), None)
-    if result.status_code == 200:
+    if not isinstance(result, tuple) and result.status_code == 200:
         body = request.get_json(silent=True) or {}
         if body.get("is_active") is False:
             security_store.end_other_sessions("", user=address.strip().lower())
@@ -2750,7 +2775,7 @@ def api_v1_send():
 # In personal-accounts mode everyone works in their own mailbox's Drive and Calendar. With the single shared
 # password, the page says which mailbox (the one that is open), like the mail views do.
 
-DRIVE_MAX_FILE_MB = max(1, int(os.getenv("DRIVE_MAX_FILE_MB", "100")))
+DRIVE_MAX_FILE_MB = max(1, int(os.getenv("DRIVE_MAX_FILE_MB", "10240")))
 PUBLIC_URL = os.getenv("PUBLIC_URL", "").strip().split(",")[0].strip().rstrip("/")
 _SAFE_INLINE = {"image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain"}
 
@@ -2911,6 +2936,57 @@ def drive_upload():
     if resp.status_code != 201:
         return jsonify({"success": False, "message": _extract_api_error(resp, "Upload failed")}), resp.status_code
     return jsonify({"success": True, "file": resp.json()})
+
+
+# Big files go up in parts (16 MB each by default), so no single request comes near Cloudflare's 100 MB limit.
+DRIVE_UPLOAD_PART_MB = min(64, max(1, int(os.getenv("DRIVE_UPLOAD_PART_MB", "16"))))
+
+
+@app.route("/api/drive/uploads", methods=["POST"])
+@login_required
+def drive_upload_start():
+    address = _drive_address()
+    if not address:
+        return _no_mailbox()
+    body = request.get_json(silent=True) or {}
+    return _svc_json("POST", f"/admin/drive/{_seg(address)}/uploads",
+                     {k: body.get(k) for k in ("name", "folder", "size", "content_type")})
+
+
+@app.route("/api/drive/uploads/<upload_id>", methods=["PUT", "DELETE"])
+@login_required
+def drive_upload_part(upload_id):
+    address = _drive_address()
+    if not address:
+        return _no_mailbox()
+    path = f"/admin/drive/{_seg(address)}/uploads/{_seg(upload_id)}"
+    if request.method == "DELETE":
+        return _svc_json("DELETE", path)
+    if _check_viewer_rate_limit("drive_upload_part", 60, 900):
+        return _rate_limited_json()
+    limit = DRIVE_UPLOAD_PART_MB * 1024 * 1024
+    request.max_content_length = limit + 1024
+    if (request.content_length or 0) > limit:
+        return jsonify({"success": False, "message": f"A part can be at most {DRIVE_UPLOAD_PART_MB} MB"}), 413
+    data = request.get_data(cache=False)
+    try:
+        resp = internal_http.put(f"{DUCKMAIL_BASE_URL.rstrip('/')}{path}", params={"part": request.args.get("part", "0")},
+                                 data=data, timeout=(10, 300),
+                                 headers={"Authorization": f"Bearer {DUCKMAIL_API_KEY}", "Content-Type": "application/octet-stream"})
+    except Exception:
+        return jsonify({"success": False, "message": "Could not reach the mail service"}), 502
+    if resp.status_code != 200:
+        return jsonify({"success": False, "message": _extract_api_error(resp, "Upload failed")}), resp.status_code
+    return jsonify({"success": True, **resp.json()})
+
+
+@app.route("/api/drive/uploads/<upload_id>/finish", methods=["POST"])
+@login_required
+def drive_upload_finish(upload_id):
+    address = _drive_address()
+    if not address:
+        return _no_mailbox()
+    return _svc_json("POST", f"/admin/drive/{_seg(address)}/uploads/{_seg(upload_id)}/finish", {})
 
 
 @app.route("/api/drive/files/<file_id>", methods=["PATCH", "DELETE"])

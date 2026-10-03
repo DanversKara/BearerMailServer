@@ -141,3 +141,11 @@ def test_first_list_sorts_old_mail(client, auth_header, mock_mongo):
                                         "text": "", "html": "", "created_at": now, "is_deleted": False, "seen": False})
     primary = client.get("/messages", params={"tab": "primary"}, headers=auth_header).json()["hydra:member"]
     assert [m["subject"] for m in primary] == ["Dinner?"]
+
+
+
+def test_tab_order_is_saved(client, auth_header):
+    r = client.post("/messages/tabs/settings", headers=auth_header, json={"order": ["security", "favorites", "primary", "nope"]}).json()
+    ids = [t["id"] for t in r["tabs"]]
+    assert ids[:3] == ["security", "favorites", "primary"] and "nope" not in ids and len(ids) == len(tabs_ext.BUILTIN_TABS)
+    assert [t["id"] for t in client.get("/messages/tabs", headers=auth_header).json()["tabs"]][:3] == ["security", "favorites", "primary"]

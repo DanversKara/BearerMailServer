@@ -178,6 +178,7 @@ def _settings(address: str) -> dict:
         "custom": doc.get("custom", []),
         "hidden": doc.get("hidden", []),
         "rules": doc.get("rules", []),
+        "order": doc.get("order", []),
     }
 
 
@@ -338,6 +339,9 @@ def _tabs_payload(account: dict) -> dict:
         tabs.append({"id": c["id"], "name": c["name"], "icon": c.get("icon") or "bi-folder", "builtin": False,
                      "auto": False, "hidden": c["id"] in settings["hidden"],
                      "total": counts.get(c["id"], [0, 0])[0], "unread": counts.get(c["id"], [0, 0])[1]})
+    # Your own order (dragged in the web app); tabs not in it keep their usual place after the ordered ones.
+    rank = {tid: i for i, tid in enumerate(settings["order"])}
+    tabs = [t for _, t in sorted(enumerate(tabs), key=lambda it: (rank.get(it[1]["id"], len(rank) + it[0]), it[0]))]
     return {"enabled": settings["enabled"], "tabs": tabs, "rules": settings["rules"],
             "flood": _flood(account), "threshold": FLOOD_THRESHOLD}
 
@@ -374,6 +378,9 @@ async def update_tabs(request: Request):
     update = {}
     if "enabled" in data:
         update["enabled"] = bool(data["enabled"])
+    if "order" in data and isinstance(data["order"], list):
+        known = set(_all_tab_ids(settings))
+        update["order"] = list(dict.fromkeys(str(t) for t in data["order"] if str(t) in known))
     if "hidden" in data and isinstance(data["hidden"], list):
         known = set(_all_tab_ids(settings)) - {"primary"}
         update["hidden"] = [t for t in data["hidden"] if t in known]

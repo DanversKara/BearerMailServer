@@ -224,8 +224,12 @@ html[data-theme$="-dark"] .bm-warn { color: #f3d58c; }
 html.bm-user .bm-admin-only, html.bm-admin .bm-user-only { display: none !important; }
 html.bm-no-external .bm-need-external { display: none !important; }
 html.bm-no-send .bm-fab, html.bm-no-send [onclick="openCompose()"] { display: none !important; }
-.bm-me-chip { align-items: center; gap: .35rem; font-size: .8rem; color: var(--muted-text); max-width: 220px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bm-me-chip { align-items: center; gap: .35rem; font-size: .8rem; color: var(--muted-text); max-width: 360px; min-width: 0;
+  white-space: nowrap; flex-shrink: 1; }
+.bm-me-chip > i, .bm-me-chip > .badge { flex-shrink: 0; }
+.bm-me-addr { display: inline-flex; min-width: 0; }
+.bm-me-local { min-width: 2ch; overflow: hidden; text-overflow: ellipsis; }
+.bm-me-domain { flex-shrink: 0; }
 .bm-me-chip .badge { font-size: .65rem; }
 .user-perms { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .3rem 1rem; }
 .user-card { border: 1px solid var(--border-color); border-radius: 10px; padding: .75rem .9rem; margin-bottom: .75rem; background: var(--card-bg); }
@@ -324,8 +328,8 @@ html[data-theme$="-dark"] .otp-banner-code { color:#f1f5f9; }
 .inbox-tabs.d-none { display:none !important; }
 .inbox-tab { flex:0 0 auto; display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:999px;
   border:1px solid var(--bs-border-color, #dee2e6); background:transparent; color:inherit; font-size:.85rem; white-space:nowrap; }
-.inbox-tab:hover { background:rgba(90,154,133,.08); }
-.inbox-tab.active { background:#5a9a85; border-color:#5a9a85; color:#fff; font-weight:600; }
+.inbox-tab:hover { background:rgba(var(--primary-rgb),.08); }
+.inbox-tab.active { background:var(--primary-color); border-color:var(--primary-color); color:#fff; font-weight:600; }
 .inbox-tab-count { background:rgba(0,0,0,.08); border-radius:999px; padding:0 7px; font-size:.75rem; font-weight:700; }
 .inbox-tab.active .inbox-tab-count { background:rgba(255,255,255,.25); }
 .inbox-tab-alert:not(.active) { border-color:#dc3545; color:#b02a37; }
@@ -340,7 +344,37 @@ html[data-theme$="-dark"] .otp-banner-code { color:#f1f5f9; }
 .move-tab-opt input { position:absolute; opacity:0; pointer-events:none; }
 .move-tab-opt span { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px;
   border:1px solid var(--bs-border-color, #dee2e6); font-size:.9rem; }
-.move-tab-opt input:checked + span { border-color:#5a9a85; background:rgba(90,154,133,.12); font-weight:600; }
-.move-tab-opt input:focus-visible + span { outline:2px solid #5a9a85; }
+.move-tab-opt input:checked + span { border-color:var(--primary-color); background:rgba(var(--primary-rgb),.12); font-weight:600; }
+.move-tab-opt input:focus-visible + span { outline:2px solid var(--primary-color); }
 html[data-theme$="-dark"] .flood-banner { background:#3a2708; border-color:#8a5a12; color:#ffd8a8; }
 html[data-theme$="-dark"] .inbox-tab-count { background:rgba(255,255,255,.12); }
+
+/* Inbox tabs in the left column (computers); the chip row above the list is for phones and tablets */
+.tabs-side { display:flex; flex-direction:column; gap:1px; }
+.tabs-side-item { display:flex; align-items:center; gap:10px; width:100%; padding:7px 10px; border:0; border-radius:8px;
+  background:transparent; color:inherit; font-size:.9rem; text-align:left; }
+.tabs-side-item:hover { background:rgba(127,127,127,.12); }
+.tabs-side-item.active { background:var(--primary-color); color:#fff; font-weight:600; }
+.tabs-side-item > i { width:18px; text-align:center; opacity:.85; }
+.tabs-side-name { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tabs-side-unread { font-weight:700; font-size:.78rem; padding:0 7px; border-radius:999px; background:rgba(127,127,127,.18); }
+.tabs-side-total { font-size:.78rem; opacity:.65; min-width:2ch; text-align:right; font-variant-numeric:tabular-nums; }
+.tabs-side-item.active .tabs-side-unread { background:rgba(255,255,255,.25); }
+.tabs-side-alert:not(.active) { color:#dc3545; }
+.tabs-side-alert .tabs-side-unread { background:#dc3545; color:#fff; }
+@media (min-width: 992px) { .inbox-tabs { display:none !important; } }
+
+/* Dragging tabs (reorder) and emails (drop on a tab to move) */
+.tabs-side-item.dragging, .inbox-tab.dragging { opacity: .45; }
+.tabs-side-item.drop-before { box-shadow: inset 0 3px 0 var(--primary-color); }
+.tabs-side-item.drop-after { box-shadow: inset 0 -3px 0 var(--primary-color); }
+.inbox-tab.drop-before { box-shadow: inset 3px 0 0 var(--primary-color); }
+.inbox-tab.drop-after { box-shadow: inset -3px 0 0 var(--primary-color); }
+.tabs-side-item.drop-mail, .inbox-tab.drop-mail { outline: 2px dashed var(--primary-color); outline-offset: -2px; background: rgba(var(--primary-rgb), .15); }
+.tabs-card.tabs-drop-ready, .inbox-tabs.tabs-drop-ready { box-shadow: 0 0 0 2px rgba(var(--primary-rgb), .45); }
+.tabs-side-item[draggable="true"] { cursor: grab; }
+.tabs-side-item[draggable="true"]:active { cursor: grabbing; }
+.mail-item[draggable="true"] { -webkit-user-drag: element; }
+.tabs-side-hint { font-size: .72rem; color: var(--muted-text); padding: 4px 10px 6px; }
+.tab-order-btns .btn { color: var(--muted-text); font-size: .8rem; }
+.tab-order-btns .btn:disabled { opacity: .25; }

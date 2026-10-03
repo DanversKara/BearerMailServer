@@ -247,3 +247,78 @@ def test_domains_are_granted_per_user_and_links_use_the_domains_web_address(clie
     mock_mongo.domains.update_one({"domain": "second.test"}, {"$set": {"is_active": False}})
     listed = client.get("/admin/drive/jane@test.local/shares", headers=API).json()["shares"]
     assert {s["code"]: s["web_host"] for s in listed}[s2["code"]] is None
+
+
+def test_upload_in_parts_retry_and_finish(client, jane, monkeypatch):
+    monkeypatch.setattr(drive_ext, "UPLOAD_PART", 3 * drive_ext.CHUNK)  # small parts for the test
+    data = bytes(range(256)) * (drive_ext.CHUNK * 7 // 256) + b"tail"
+    base = "/admin/drive/jane@test.local/uploads"
+    start = client.post(base, headers=API, json={"name": "big.bin", "folder": "/", "size": len(data)}).json()
+    uid, part = start["upload_id"], start["part_size"]
+    assert start["parts"] == 3
+    # Not visible while uploading
+    assert client.get("/admin/drive/jane@test.local", headers=API).json()["files"] == []
+    # Part 0, then a retry of part 0 is accepted as a duplicate, a skipped part is refused
+    r = client.put(f"{base}/{uid}", params={"part": 0}, headers=API, content=data[:part])
+    assert r.json()["received"] == part
+    assert client.put(f"{base}/{uid}", params={"part": 0}, headers=API, content=data[:part]).json()["duplicate"]
+    assert client.put(f"{base}/{uid}", params={"part": 2}, headers=API, content=b"x").status_code == 409
+    # Finishing early is refused
+    assert client.post(f"{base}/{uid}/finish", headers=API).status_code == 409
+    for i in (1, 2):
+        assert client.put(f"{base}/{uid}", params={"part": i}, headers=API, content=data[i * part:(i + 1) * part]).status_code == 200
+    f = client.post(f"{base}/{uid}/finish", headers=API).json()
+    assert f["name"] == "big.bin" and f["size"] == len(data)
+    got = client.get(f"/admin/drive/jane@test.local/files/{f['id']}/content", headers=API)
+    assert got.content == data
+
+
+def test_upload_parts_limits_and_cancel(client, jane, mock_mongo, monkeypatch):
+    monkeypatch.setattr(drive_ext, "UPLOAD_PART", drive_ext.CHUNK)
+    base = "/admin/drive/jane@test.local/uploads"
+    assert client.post(base, headers=API, json={"name": "x", "size": (drive_ext.DRIVE_MAX_FILE_MB + 1) * 1024 * 1024}).status_code == 413
+    mock_mongo.accounts.update_one({"address": "jane@test.local"}, {"$set": {"quota_mb": 1}})
+    assert client.post(base, headers=API, json={"name": "x", "size": 2 * 1024 * 1024}).status_code == 507
+    mock_mongo.accounts.update_one({"address": "jane@test.local"}, {"$unset": {"quota_mb": ""}})
+    uid = client.post(base, headers=API, json={"name": "x", "size": 10}).json()["upload_id"]
+    assert client.put(f"{base}/{uid}", params={"part": 0}, headers=API, content=b"y" * 11).status_code == 422  # more than declared
+    assert client.put(f"{base}/{uid}", params={"part": 0}, headers=API, content=b"y" * (drive_ext.CHUNK + 1)).status_code == 413
+    # Someone else's mailbox can't touch it
+    assert client.put(f"/admin/drive/sam@test.local/uploads/{uid}", params={"part": 0}, headers=API, content=b"y").status_code == 404
+    assert client.delete(f"{base}/{uid}", headers=API).json()["cancelled"]
+    assert mock_mongo.drive_files.count_documents({"name": "x"}) == 0
+
+
+def test_separate_drive_and_mailbox_limits(client, jane, mock_mongo):
+    from types import SimpleNamespace
+    import asyncio
+    from app import MailHandler
+
+    r = client.patch("/admin/users/jane@test.local", headers=API, json={"drive_quota_mb": 1, "mail_quota_mb": 1})
+    assert r.status_code == 200 and r.json()["drive_quota_mb"] == 1 and r.json()["mail_quota_mb"] == 1
+    assert client.patch("/admin/users/jane@test.local", headers=API, json={"mail_quota_mb": 0}).status_code == 422
+    # Drive limit: 1 MB, even though the total quota (5 GB default) has room
+    upload(client, "jane@test.local", "small.txt", b"x" * 1000)
+    r = client.post("/admin/drive/jane@test.local/files", params={"name": "big.bin", "size": 2 * 1024 * 1024},
+                    headers=API, content=b"y" * (2 * 1024 * 1024))
+    assert r.status_code == 507 and "Drive limit" in r.json()["detail"]
+    u = client.get("/admin/storage/jane@test.local", headers=API).json()
+    assert u["drive_quota"] == 1024 * 1024 and u["mail_quota"] == 1024 * 1024 and not u["mail_full"]
+    # Drive off (0): nothing can be added
+    client.patch("/admin/users/jane@test.local", headers=API, json={"drive_quota_mb": 0})
+    assert client.post("/admin/drive/jane@test.local/uploads", headers=API, json={"name": "a", "size": 1}).status_code == 507
+
+    # Mailbox limit: once full, new mail to the mailbox (or its alias) is refused at RCPT
+    def rcpt(addr):
+        env = SimpleNamespace(rcpt_tos=[], mail_from="x@example.org")
+        sess = SimpleNamespace(peer=("127.0.0.1", 2500), rcpt_count=0, mail_from="x@example.org")
+        return asyncio.run(MailHandler().handle_RCPT(None, sess, env, addr, []))
+    assert rcpt("jane@test.local").startswith("250")
+    mock_mongo.messages.insert_one({"to_addresses": ["jane@test.local"], "size": 2 * 1024 * 1024, "subject": "big",
+                                    "created_at": datetime.now(timezone.utc), "is_deleted": False})
+    assert rcpt("jane@test.local").startswith("552")
+    assert rcpt("shop@test.local").startswith("552")
+    assert rcpt("sam@test.local").startswith("250")
+    # Removing the limit lets mail in again
+    client.patch("/admin/users/jane@test.local", headers=API, json={"mail_quota_mb": None})
+    assert rcpt("jane@test.local").startswith("250")

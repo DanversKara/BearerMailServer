@@ -218,7 +218,7 @@
       <div class="card mb-3"><div class="card-header"><i class="bi bi-shield-lock me-1"></i>${multi ? 'Two-factor for the emergency admin sign-in' : 'Two-factor sign-in (web app)'}</div><div class="card-body">${twoFactor}</div></div>
       <div class="card mb-3"><div class="card-header d-flex justify-content-between align-items-center"><span><i class="bi bi-laptop me-1"></i>Signed-in browsers</span>
         ${(web.sessions || []).length > 1 ? '<button type="button" class="btn btn-sm btn-outline-danger" data-sec-endothers>Sign out all others</button>' : ''}</div>
-        <div class="card-body">${sessions || empty('None.')}<div class="small text-muted mt-2">A sign-in lasts ${esc(String(web.session_hours))} hours (SESSION_HOURS). Signing out here ends it on the server, so a copied cookie stops working too.</div></div></div>
+        <div class="card-body">${sessions || empty('None.')}<div class="small text-muted mt-2">A sign-in ends after ${esc(String(web.session_hours))} hours without use (SESSION_HOURS), or each person's own <i>Stay signed in</i> length (Setup &gt; Users &gt; Manage). Signing out here ends it on the server, so a copied cookie stops working too.</div></div></div>
       <div class="alert alert-secondary small mb-0"><b>Mail app passwords</b> (Thunderbird, phones) are separate: each mailbox has its own, changed under Setup &gt; Mailboxes &gt; Reset password.
         The web app password is <code>ACCESS_PASSWORD</code> in <code>.env</code>.</div>`;
   }

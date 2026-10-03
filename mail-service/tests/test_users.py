@@ -142,3 +142,12 @@ def test_sending_rules(client, people, mock_mongo, monkeypatch):
     assert sent[0] == "Brevo"
     client.patch("/admin/users/jane@test.local", headers=API, json={"permissions": {"send": False}})
     assert client.post("/admin/send", headers=API, json={**msg, "from_email": "jane@test.local", "as_user": "jane@test.local"}).status_code == 403
+
+
+def test_stay_signed_in_choice(client, people):
+    addr = "jane@test.local"
+    r = client.patch(f"/admin/users/{addr}", headers=API, json={"session_days": 30})
+    assert r.status_code == 200 and r.json()["session_days"] == 30
+    assert client.get(f"/admin/users/{addr}", headers=API).json()["session_days"] == 30
+    assert client.patch(f"/admin/users/{addr}", headers=API, json={"session_days": 2}).status_code == 422
+    assert client.patch(f"/admin/users/{addr}", headers=API, json={"session_days": None}).json()["session_days"] is None

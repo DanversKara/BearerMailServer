@@ -1,5 +1,31 @@
 # BearerMail changes
 
+## Big Drive files, stay signed in, tab counts, themes
+
+- **Drive files up to 10 GB** (`DRIVE_MAX_FILE_MB`, default 10240). Uploads go in 16 MB parts
+  (`DRIVE_UPLOAD_PART_MB`), so Cloudflare's 100 MB-per-request limit no longer applies. A dropped part is
+  retried automatically, uploads show "x MB of y GB" and can be cancelled, and unfinished uploads stay
+  invisible and are cleaned up after a day. Each person's storage quota still applies.
+  **If your .env has `DRIVE_MAX_FILE_MB=100`, delete that line or raise it.**
+- **Stay signed in**: Setup > Users > Manage > *Stay signed in* (1 day to 1 year, or the default). Sign-ins
+  now end after that long *without use* instead of at a fixed time after signing in, so daily use keeps you
+  signed in. The default is still SESSION_HOURS (7 days).
+- **Inbox tabs in the left column** (computers), at the top under Compose, with unread and total counts; the
+  tab row above the list remains on phones and tablets.
+  - **Drag tabs to reorder them** (saved per mailbox). On phones use the up/down arrows in the tab gear menu.
+  - **Drop an email (or all ticked emails) on a tab** to move it there; the message that pops up offers
+    *Always for this sender*.
+- **Separate Drive and mailbox limits per user** (Setup > Users > Manage), inside the total storage:
+  *Drive limit* (0 = no Drive at all) stops uploads at that size; *Mailbox limit* refuses new mail once
+  reached (senders get a "mailbox full" bounce, logged as `mailbox_full` under Security). Both are optional.
+- **Layout fix**: on computers the three columns no longer run 24px past the bottom of the window, so
+  the panels keep their bottom edge and the last card in the left column (Storage) is no longer cut off.
+- **Header**: the signed-in address never cuts off the domain (only the name before @ shortens), and the
+  Settings button is gone (Setup does the same).
+- **Themes**: new Ocean, Lavender, Sunset, Slate (light), Mint Dark, Ocean Dark, Lavender Dark, Forest,
+  Midnight, Graphite (dark), and five **animated** ones: Aurora, Starfield, Synthwave, Sunrise and Ocean Waves.
+  Animations stay still when the device asks for reduced motion. The sign-in page has a theme menu.
+
 ## Dynamic IP and Cloudflare DNS
 
 - **Setup > Domains & DNS > Dynamic IP & Cloudflare**: paste a Cloudflare API token ("Edit zone DNS" template)

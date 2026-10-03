@@ -48,7 +48,145 @@
         return (S.data?.tabs || []).filter(t => !t.hidden && (t.id === 'primary' || t.total > 0 || t.id === S.current));
     }
 
+    /* ---------------- dragging: reorder tabs, or drop emails on a tab to move them ---------------- */
+    const D = { kind: null, tab: null, mail: [] };
+
+    function clearDropMarks() {
+        document.querySelectorAll('.drop-before,.drop-after,.drop-mail,.dragging').forEach(el => el.classList.remove('drop-before', 'drop-after', 'drop-mail', 'dragging'));
+    }
+
+    function wireDrag(container, selector, key, horizontal) {
+        container.querySelectorAll(selector).forEach(el => {
+            const id = el.dataset[key];
+            if (!readOnly() && id !== 'all') {
+                el.draggable = true;
+                el.ondragstart = e => {
+                    D.kind = 'tab'; D.tab = id;
+                    e.dataTransfer.effectAllowed = 'move';
+                    try { e.dataTransfer.setData('text/plain', id); } catch (err) { /* old browsers */ }
+                    el.classList.add('dragging');
+                };
+                el.ondragend = dragEnd;
+            }
+            el.ondragover = e => {
+                if (D.kind === 'tab' && id !== 'all' && id !== D.tab) {
+                    e.preventDefault();
+                    const r = el.getBoundingClientRect();
+                    const after = horizontal ? e.clientX > r.left + r.width / 2 : e.clientY > r.top + r.height / 2;
+                    el.classList.toggle('drop-after', after);
+                    el.classList.toggle('drop-before', !after);
+                } else if (D.kind === 'mail' && id !== 'all') {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    el.classList.add('drop-mail');
+                }
+            };
+            el.ondragleave = () => el.classList.remove('drop-before', 'drop-after', 'drop-mail');
+            el.ondrop = e => {
+                e.preventDefault();
+                const after = el.classList.contains('drop-after');
+                const kind = D.kind, from = D.tab, ids = D.mail.slice();
+                dragEnd();
+                if (kind === 'tab' && from && from !== id && id !== 'all') reorder(from, id, after);
+                else if (kind === 'mail' && ids.length && id !== 'all') moveMail(ids, id);
+            };
+        });
+    }
+
+    function dragEnd() {
+        D.kind = null; D.tab = null; D.mail = [];
+        clearDropMarks();
+        const card = document.getElementById('tabs-card');
+        if (card) card.classList.remove('tabs-drop-ready');
+        const box = document.getElementById('inbox-tabs');
+        if (box) box.classList.remove('tabs-drop-ready');
+    }
+
+    async function saveOrder(ids) {
+        try { S.data = await post('/api/inbox/tabs/settings', { order: ids }); } catch (e) { toastError(e.message); }
+        render();
+    }
+
+    function reorder(from, to, after) {
+        const ids = S.data.tabs.map(t => t.id).filter(t => t !== from);
+        let at = ids.indexOf(to);
+        if (at < 0) return;
+        if (after) at += 1;
+        ids.splice(at, 0, from);
+        // Show the new order right away, then save it.
+        S.data.tabs = ids.map(tid => tabById(tid)).filter(Boolean);
+        render();
+        saveOrder(ids);
+    }
+
+    // Called by each email in the list (index.html): drag one email, or all ticked ones if it is ticked.
+    function dragMail(e, id) {
+        if (readOnly() || !S.data || !S.data.enabled) return;
+        const ticked = typeof getSelectedIds === 'function' ? getSelectedIds() : [];
+        D.kind = 'mail';
+        D.mail = ticked.includes(id) ? ticked : [id];
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', D.mail.join(',')); } catch (err) { /* old browsers */ }
+        const card = document.getElementById('tabs-card');
+        if (card) card.classList.add('tabs-drop-ready');
+        const box = document.getElementById('inbox-tabs');
+        if (box) box.classList.add('tabs-drop-ready');
+    }
+
+    async function moveMail(ids, tab) {
+        const senders = _sendersOf(ids);
+        try {
+            S.data = await post('/api/inbox/tabs/move', { message_ids: ids, tab });
+        } catch (e) { return toastError(e.message); }
+        const t = tabById(tab);
+        const n = ids.length;
+        showToast(`Moved ${n} email${n === 1 ? '' : 's'} to ${t ? t.name : 'tab'}`, {
+            type: 'success',
+            actionLabel: senders.length ? 'Always for ' + (senders.length === 1 ? 'this sender' : 'these senders') : undefined,
+            onAction: senders.length ? async () => {
+                try {
+                    S.data = await post('/api/inbox/tabs/move', { message_ids: ids, tab, rule: 'sender', senders });
+                    showToast(`Future email from ${senders.length === 1 ? senders[0] : 'those senders'} goes to ${t ? t.name : 'that tab'}`, { type: 'success' });
+                    queryInbox(true);
+                } catch (e) { toastError(e.message); }
+            } : undefined,
+        });
+        if (window._currentDetailMsg && ids.includes(window._currentDetailMsg.id) && S.current !== 'all' && tab !== S.current) resetMailDetail();
+        queryInbox(true);
+    }
+
+    // Left column (computers): every tab with its count, at the top.
+    function renderSide() {
+        const card = document.getElementById('tabs-card');
+        const list = document.getElementById('tabs-card-list');
+        if (!card || !list) return;
+        const show = !!currentEmail && currentEmail === S.email && S.data && S.data.enabled;
+        card.classList.toggle('d-none', !show);
+        if (!show) { list.innerHTML = ''; return; }
+        const onInbox = currentTab === 'inbox' && !isSearchMode;
+        const fmt = n => n > 9999 ? Math.round(n / 1000) + 'k' : String(n);
+        const row = t => {
+            const alert = t.id === 'security' && t.unread > 0;
+            return `<button type="button" class="tabs-side-item ${onInbox && t.id === S.current ? 'active' : ''} ${alert ? 'tabs-side-alert' : ''}" data-side-tab="${esc(t.id)}"
+                title="${esc(t.name)}: ${t.total} email${t.total === 1 ? '' : 's'}, ${t.unread} unread">
+                <i class="bi ${esc(t.icon)}"></i><span class="tabs-side-name">${esc(t.name)}</span>
+                ${t.unread ? `<span class="tabs-side-unread">${fmt(t.unread)}</span>` : ''}<span class="tabs-side-total">${fmt(t.total)}</span></button>`;
+        };
+        const tabs = S.data.tabs.filter(t => !t.hidden);
+        const all = tabs.reduce((a, t) => ({ total: a.total + t.total, unread: a.unread + t.unread }), { total: 0, unread: 0 });
+        list.innerHTML = tabs.map(row).join('') + row({ id: 'all', name: 'All mail', icon: 'bi-collection', total: all.total, unread: all.unread });
+        list.querySelectorAll('[data-side-tab]').forEach(b => b.onclick = () => {
+            if (currentTab !== 'inbox') { S.current = b.dataset.sideTab; store.set('bm-tab:' + S.email, S.current); switchTab('inbox'); queryInbox(); }
+            else select(b.dataset.sideTab);
+            if (typeof closeLeftDrawer === 'function') closeLeftDrawer();
+        });
+        wireDrag(list, '[data-side-tab]', 'sideTab', false);
+        const gear = document.getElementById('tabs-card-manage');
+        if (gear) gear.onclick = manage;
+    }
+
     function render() {
+        renderSide();
         const box = document.getElementById('inbox-tabs');
         const flood = document.getElementById('flood-banner');
         if (!box) return;
@@ -64,6 +202,7 @@
             + `<button type="button" class="inbox-tab ${S.current === 'all' ? 'active' : ''}" data-tab="all" title="Every email in one list"><i class="bi bi-collection"></i><span>All</span></button>`
             + `<button type="button" class="inbox-tab inbox-tab-gear" data-tabs-manage title="Manage tabs and sorting rules" aria-label="Manage tabs"><i class="bi bi-gear"></i></button>`;
         box.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => select(b.dataset.tab));
+        wireDrag(box, '[data-tab]', 'tab', true);
         box.querySelector('[data-tabs-manage]').onclick = manage;
         const active = box.querySelector('.inbox-tab.active');
         if (active && active.scrollIntoView) active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -183,9 +322,13 @@
                 <input class="form-check-input" type="checkbox" id="tabs-enabled" ${d.enabled ? 'checked' : ''} ${readOnly() ? 'disabled' : ''}>
                 <label class="form-check-label" for="tabs-enabled"><b>Sort my inbox into tabs</b><div class="small text-muted">Off = every email in one list.</div></label>
             </div>
-            <div class="fw-semibold small mb-1">Tabs</div>
+            <div class="fw-semibold small mb-1">Tabs <span class="fw-normal text-muted">(arrows or drag in the tab list to change the order)</span></div>
             <div class="list-group mb-2">
-                ${tabs.map(t => `<div class="list-group-item d-flex align-items-center gap-2 py-2">
+                ${tabs.map((t, i) => `<div class="list-group-item d-flex align-items-center gap-2 py-2">
+                    <div class="btn-group-vertical btn-group-sm tab-order-btns">
+                        <button type="button" class="btn btn-link p-0 lh-1" data-tab-up="${esc(t.id)}" title="Move up" aria-label="Move ${esc(t.name)} up" ${i === 0 || readOnly() ? 'disabled' : ''}><i class="bi bi-chevron-up"></i></button>
+                        <button type="button" class="btn btn-link p-0 lh-1" data-tab-down="${esc(t.id)}" title="Move down" aria-label="Move ${esc(t.name)} down" ${i === tabs.length - 1 || readOnly() ? 'disabled' : ''}><i class="bi bi-chevron-down"></i></button>
+                    </div>
                     <i class="bi ${esc(t.icon)}"></i>
                     ${t.builtin ? `<span class="flex-grow-1">${esc(t.name)}${t.auto ? ' <span class="badge text-bg-light border fw-normal">auto</span>' : ''}</span>`
                         : `<input class="form-control form-control-sm flex-grow-1" value="${esc(t.name)}" maxlength="30" data-tab-rename="${esc(t.id)}" ${readOnly() ? 'disabled' : ''}>`}
@@ -224,6 +367,15 @@
         body.querySelectorAll('[data-tab-rename]').forEach(i => i.onchange = () => apply({ rename_tab: { id: i.dataset.tabRename, name: i.value } }));
         body.querySelectorAll('[data-tab-remove]').forEach(b => b.onclick = () => apply({ remove_tab: b.dataset.tabRemove }));
         body.querySelectorAll('[data-rule-remove]').forEach(b => b.onclick = () => apply({ remove_rule: b.dataset.ruleRemove }));
+        const shift = (id, by) => {
+            const ids = S.data.tabs.map(t => t.id);
+            const i = ids.indexOf(id), j = i + by;
+            if (i < 0 || j < 0 || j >= ids.length) return;
+            [ids[i], ids[j]] = [ids[j], ids[i]];
+            apply({ order: ids });
+        };
+        body.querySelectorAll('[data-tab-up]').forEach(b => b.onclick = () => shift(b.dataset.tabUp, -1));
+        body.querySelectorAll('[data-tab-down]').forEach(b => b.onclick = () => shift(b.dataset.tabDown, 1));
         const add = body.querySelector('[data-tab-add]');
         const addName = body.querySelector('[data-tab-add-name]');
         if (add) add.onclick = () => addName.value.trim() && apply({ add_tab: addName.value.trim() });
@@ -240,5 +392,5 @@
         });
     }
 
-    window.BearerTabs = { onMailbox, current, refresh, render, select, moveDialog, manage, emptyText, state: S };
+    window.BearerTabs = { onMailbox, current, refresh, render, select, moveDialog, manage, emptyText, dragMail, dragEnd, state: S };
 })();

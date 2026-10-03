@@ -21,8 +21,9 @@
   const body = (extra) => window.drivePayload(extra);
 
   const ICONS = [
-    [/^image\//, 'bi-file-earmark-image'], [/pdf/, 'bi-file-earmark-pdf'], [/word|document/, 'bi-file-earmark-word'],
-    [/sheet|excel|csv/, 'bi-file-earmark-spreadsheet'], [/presentation|powerpoint/, 'bi-file-earmark-slides'],
+    // Spreadsheets and slides first: their types also contain "document" (officedocument.spreadsheetml...).
+    [/^image\//, 'bi-file-earmark-image'], [/pdf/, 'bi-file-earmark-pdf'], [/sheet|excel|csv/, 'bi-file-earmark-spreadsheet'],
+    [/presentation|powerpoint/, 'bi-file-earmark-slides'], [/word|document/, 'bi-file-earmark-word'],
     [/zip|compressed|tar|7z|rar/, 'bi-file-earmark-zip'], [/^audio\//, 'bi-file-earmark-music'], [/^video\//, 'bi-file-earmark-play'],
     [/rfc822/, 'bi-envelope-paper'], [/calendar/, 'bi-calendar-event'], [/^text\//, 'bi-file-earmark-text'],
   ];
@@ -72,8 +73,7 @@
               <li><hr class="dropdown-divider"></li>
               <li><button class="dropdown-item text-danger" type="button" data-d-delete="${f.id}"><i class="bi bi-trash me-2"></i>Delete</button></li>`}
             </ul></div></div></div>`).join('');
-    const uploads = D.uploads.map((u) => `<div class="drive-progress mb-1"><div class="d-flex justify-content-between"><span class="text-truncate">${esc(u.name)}</span><span>${u.error ? `<span class="text-danger">${esc(u.error)}</span>` : u.done ? 'done' : u.pct + '%'}</span></div>
-        <div class="progress" style="height:4px"><div class="progress-bar${u.error ? ' bg-danger' : ''}" style="width:${u.error ? 100 : u.pct}%"></div></div></div>`).join('');
+    const uploads = `<div id="drive-uploads">${progressHtml()}</div>`;
     const pct = s.unlimited ? 0 : Math.min(100, s.percent);
     root().innerHTML = `<div class="card" id="drive-card"><div class="card-header drive-toolbar">
         <div class="drive-crumbs">${crumbs}</div>
@@ -88,8 +88,8 @@
       <div class="card-body">
         <div class="d-flex flex-wrap align-items-center gap-2 small text-muted mb-3">
           <div class="progress flex-grow-1" style="height:6px;max-width:260px"><div class="progress-bar${pct >= 95 ? ' bg-danger' : pct >= 80 ? ' bg-warning' : ''}" style="width:${s.unlimited ? 0 : Math.max(pct, 1)}%"></div></div>
-          <span>${s.unlimited ? `${size(s.used)} used (no limit)` : `${size(s.used)} of ${size(s.quota)} used`} &middot; mail ${size(s.mail)}, Drive ${size(s.drive)}</span>
-          <span>&middot; files up to ${esc(d.max_file_mb)} MB</span></div>
+          <span>${s.unlimited ? `${size(s.used)} used (no limit)` : `${size(s.used)} of ${size(s.quota)} used`} &middot; mail ${size(s.mail)}${s.mail_quota ? ` of ${size(s.mail_quota)}` : ''}, Drive ${s.drive_quota === 0 ? 'off' : `${size(s.drive)}${s.drive_quota ? ` of ${size(s.drive_quota)}` : ''}`}</span>
+          <span>&middot; files up to ${d.max_file_mb >= 1024 ? esc(+(d.max_file_mb / 1024).toFixed(1)) + ' GB' : esc(d.max_file_mb) + ' MB'}</span></div>
         ${uploads}
         ${folders ? `<div class="drive-grid mb-3">${folders}</div>` : ''}
         ${files || (folders ? '' : `<div class="text-center text-muted py-5"><i class="bi bi-cloud-arrow-up" style="font-size:2.4rem;opacity:.4"></i>
@@ -99,26 +99,93 @@
   }
 
   /* ------------------------------------------------------------ uploads */
+  // Files go up in parts (16 MB by default): no single request comes near Cloudflare's 100 MB limit,
+  // a dropped part is simply sent again, and very large files work in any browser.
+  let uploadQueue = Promise.resolve();
+
   function uploadFiles(fileList) {
     const folder = D.folder;
     Array.from(fileList || []).forEach((file) => {
-      const u = { name: file.name, pct: 0, done: false, error: '' };
+      const u = { name: file.name, pct: 0, done: false, error: '', sent: 0, total: file.size, cancel: false, xhr: null, id: null };
       D.uploads.push(u);
+      uploadQueue = uploadQueue.then(() => uploadOne(file, folder, u)).catch(() => {});
+    });
+    if (D.data) render();
+  }
+
+  function sendPart(url, blob, u) {
+    return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/drive/upload' + q({ folder, name: file.name }));
+      u.xhr = xhr;
+      xhr.open('PUT', url);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-      xhr.setRequestHeader('X-File-Type', file.type || 'application/octet-stream');
-      xhr.upload.onprogress = (ev) => { if (ev.lengthComputable) { u.pct = Math.round(ev.loaded * 100 / ev.total); if (D.data && D.view === 'files') render(); } };
+      xhr.upload.onprogress = (ev) => {
+        if (!ev.lengthComputable || !u.total) return;
+        u.pct = Math.min(99, Math.floor((u.sent + ev.loaded) * 100 / u.total));
+        if (D.data && D.view === 'files') renderProgress();
+      };
       xhr.onload = () => {
         let res = {};
         try { res = JSON.parse(xhr.responseText); } catch (e) { /* ignore */ }
-        if (xhr.status >= 200 && xhr.status < 300 && res.success) { u.done = true; u.pct = 100; } else { u.error = res.message || `Upload failed (${xhr.status})`; }
-        finishUpload(u);
+        if (xhr.status >= 200 && xhr.status < 300 && res.success) resolve(res);
+        else { const err = new Error(res.message || `Upload failed (${xhr.status})`); err.status = xhr.status; reject(err); }
       };
-      xhr.onerror = () => { u.error = 'Connection lost'; finishUpload(u); };
-      xhr.send(file);
+      xhr.onerror = () => reject(Object.assign(new Error('Connection lost'), { status: 0 }));
+      xhr.onabort = () => reject(Object.assign(new Error('Cancelled'), { status: -1 }));
+      xhr.send(blob);
     });
-    if (D.data) render();
+  }
+
+  async function uploadOne(file, folder, u) {
+    try {
+      const start = await call('POST', '/api/drive/uploads' + q({}), body({ name: file.name, folder, size: file.size, content_type: file.type || 'application/octet-stream' }));
+      u.id = start.upload_id;
+      const part = start.part_size;
+      const parts = Math.max(1, Math.ceil(file.size / part));
+      for (let i = 0; i < parts; i++) {
+        if (u.cancel) throw Object.assign(new Error('Cancelled'), { status: -1 });
+        const blob = file.slice(i * part, Math.min(file.size, (i + 1) * part));
+        for (let attempt = 1; ; attempt++) {
+          try {
+            await sendPart(`/api/drive/uploads/${encodeURIComponent(u.id)}` + q({ part: i }), blob, u);
+            break;
+          } catch (e) {
+            // Retry network hiccups and server errors; give up on "no" answers (full storage, too big...).
+            const retry = !u.cancel && attempt < 4 && (e.status === 0 || e.status >= 500 || e.status === 429) && e.status !== 507;
+            if (!retry) throw e;
+            await new Promise((r) => setTimeout(r, 1500 * attempt));
+          }
+        }
+        u.sent += blob.size;
+        u.pct = Math.min(99, Math.floor(u.sent * 100 / (file.size || 1)));
+        if (D.data && D.view === 'files') renderProgress();
+      }
+      await call('POST', `/api/drive/uploads/${encodeURIComponent(u.id)}/finish` + q({}), body({}));
+      u.done = true; u.pct = 100;
+    } catch (e) {
+      u.error = e.message || 'Upload failed';
+      if (u.id) fetch(`/api/drive/uploads/${encodeURIComponent(u.id)}` + q({}), { method: 'DELETE' }).catch(() => {});
+    }
+    finishUpload(u);
+  }
+
+  function cancelUpload(i) {
+    const u = D.uploads[i];
+    if (!u || u.done) return;
+    u.cancel = true;
+    if (u.xhr) u.xhr.abort();
+  }
+
+  function progressHtml() {
+    return D.uploads.map((u, i) => `<div class="drive-progress mb-1"><div class="d-flex justify-content-between gap-2"><span class="text-truncate">${esc(u.name)}</span>
+        <span class="text-nowrap">${u.error ? `<span class="text-danger">${esc(u.error)}</span>` : u.done ? 'done'
+          : `${u.total > 1024 * 1024 ? `${size(u.sent)} of ${size(u.total)} · ` : ''}${u.pct}% <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-danger" data-d-cancel="${i}" title="Cancel upload"><i class="bi bi-x-circle"></i></button>`}</span></div>
+        <div class="progress" style="height:4px"><div class="progress-bar${u.error ? ' bg-danger' : ''}" style="width:${u.error ? 100 : u.pct}%"></div></div></div>`).join('');
+  }
+
+  function renderProgress() {
+    const box = document.getElementById('drive-uploads');
+    if (box) box.innerHTML = progressHtml(); else render();
   }
 
   function finishUpload(u) {
@@ -230,6 +297,7 @@
     const file = (id) => (D.data.files || []).find((f) => f.id === id);
     const run = async (fn) => { try { await fn(); } catch (e) { fail(e.message); } };
     if (d.dFolder) { D.folder = d.dFolder; D.view = 'files'; open(); return; }
+    if (d.dCancel !== undefined) { cancelUpload(+d.dCancel); return; }
     if (d.dUpload !== undefined) { const input = document.getElementById('drive-file-input'); input.onchange = () => { uploadFiles(input.files); input.value = ''; }; input.click(); return; }
     if (d.dNewfolder !== undefined) {
       const name = window.prompt('New folder name:'); if (!name) return;

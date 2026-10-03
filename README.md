@@ -11,14 +11,67 @@ Self-hosted email for your own domain.
 - A **storage quota** per mailbox, shown under Recent.
 - See the exact **MX, SPF, DKIM and DMARC** records for each domain on screen, with a **Check DNS** button.
 
-## Side Note:
-- When sending large files by email, keep in mind that most email services have a file-size limit of around 20–25 MB.
+## Screenshots
 
-Before sending the email, go to Drive and create a folder specifically for the email you’re about to send. Upload all the necessary files into that folder, then click Share and Create link.
+All screenshots use made-up demo data on `example.net`.
 
-Next, compose your email and include the Drive link instead of attaching the files directly. This makes it easier for the recipient to access the content without running into email attachment-size restrictions.
+<img src="screenshots_images/02-inbox.png" alt="Inbox with tabs">
 
-Once the recipient has finished accessing the files, you can delete the folder or set it to automatically expire/delete after a certain period.
+| | |
+|---|---|
+| <img src="screenshots_images/03-verification-code.png" alt="Verification code banner"> | <img src="screenshots_images/05-forged-sender-warning.png" alt="Forged sender warning"> |
+| **Verification codes** get a one-tap Copy code banner. | **Forged senders** (failed SPF/DKIM/DMARC) and deceptive links are flagged. |
+| <img src="screenshots_images/35-mail-flood-warning.png" alt="Mail flood warning"> | <img src="screenshots_images/35b-flood-security-alert-found.png" alt="Security alert found in a flood"> |
+| **Mail flood warning**: floods are used to hide account alerts. | The **Security tab** keeps the real alert where you can see it. |
+| <img src="screenshots_images/04-move-to-tab.png" alt="Move to tab"> | <img src="screenshots_images/09-tab-settings.png" alt="Tab settings"> |
+| **Move to tab**, now and for future mail from that sender. | **Tabs and sorting rules**: hide, rename, reorder, add your own. |
+| <img src="screenshots_images/06-privacy-blocked-trackers.png" alt="Blocked trackers"> | <img src="screenshots_images/08-compose.png" alt="Compose"> |
+| **Privacy**: remote images and tracking pixels are blocked. | **Compose** from any of your addresses, attach from Drive, send invitations. |
+| <img src="screenshots_images/12-drive.png" alt="Drive"> | <img src="screenshots_images/13-drive-share-link.png" alt="Share link"> |
+| **Drive**: folders, previews, files up to 10 GB. | **Share links** with a password and an expiry date. |
+| <img src="screenshots_images/36-public-share-page.png" alt="Protected share link"> | <img src="screenshots_images/37-public-share-unlocked.png" alt="Share link download"> |
+| What someone with a protected link sees... | ...and after entering the password. |
+| <img src="screenshots_images/14-calendar.png" alt="Calendar"> | <img src="screenshots_images/15-calendar-event.png" alt="Calendar event"> |
+| **Calendar**: month and list views. | Events with guests, invitations by email, .ics download, share links. |
+| <img src="screenshots_images/10-sent.png" alt="Sent"> | <img src="screenshots_images/11-trash.png" alt="Trash"> |
+| **Sent** mail. | **Trash** with restore and delete forever. |
+
+### Setup
+
+| | |
+|---|---|
+| <img src="screenshots_images/16-setup-get-started.png" alt="Get started"> | <img src="screenshots_images/17-domains-dns.png" alt="Domains and dynamic IP"> |
+| **Get started** checklist. | **Dynamic IP & Cloudflare**: DNS follows your home IP automatically. |
+| <img src="screenshots_images/18-dns-records.png" alt="DNS records"> | <img src="screenshots_images/19-mailboxes.png" alt="Mailboxes"> |
+| The exact **MX, SPF, DKIM, DMARC** records, Check DNS and Apply to Cloudflare. | **Mailboxes**. |
+| <img src="screenshots_images/20-aliases.png" alt="Aliases"> | <img src="screenshots_images/21-smtp-providers.png" alt="SMTP providers"> |
+| **Disposable aliases**. | **3rd-party SMTP** for sending (Mailjet, SendGrid, Brevo...). |
+| <img src="screenshots_images/22-apis-smtp-keys.png" alt="APIs and SMTP keys"> | <img src="screenshots_images/23-connect-mail-app.png" alt="Connect a mail app"> |
+| **App passwords and SMTP keys** for mail apps and scripts. | **Connect a mail app**: IMAP and SMTP settings. |
+| <img src="screenshots_images/24-users.png" alt="Users"> | <img src="screenshots_images/28-my-account.png" alt="My account"> |
+| **Users**: permissions, storage, Drive and mailbox limits, stay signed in. | **My account**: password, two-factor, app passwords. |
+| <img src="screenshots_images/25-security.png" alt="Security overview"> | <img src="screenshots_images/25b-security-activity.png" alt="Security activity"> |
+| **Security** overview: ports, sessions, suspicious addresses. | **Activity** log. |
+| <img src="screenshots_images/26-dmarc-reports.png" alt="DMARC reports"> | <img src="screenshots_images/29-external-accounts.png" alt="External accounts"> |
+| **DMARC reports**: who sends mail as your domain. | **External accounts** (Gmail, Outlook... over IMAP). |
+
+### Themes
+
+<img src="screenshots_images/27-appearance-themes.png" alt="Theme picker">
+
+| | | |
+|---|---|---|
+| <img src="screenshots_images/30-theme-aurora.png" alt="Aurora (animated)"> | <img src="screenshots_images/31-theme-synthwave.png" alt="Synthwave (animated)"> | <img src="screenshots_images/33-theme-sunrise.png" alt="Sunrise (animated)"> |
+| Aurora (animated) | Synthwave (animated) | Sunrise (animated) |
+| <img src="screenshots_images/34-theme-ocean-waves.png" alt="Ocean Waves (animated)"> | <img src="screenshots_images/32-theme-midnight.png" alt="Midnight"> | <img src="screenshots_images/01-login.png" alt="Sign in"> |
+| Ocean Waves (animated) | Midnight | Sign-in page |
+
+### Phone
+
+| | | |
+|---|---|---|
+| <img src="screenshots_images/m1-phone-inbox.png" alt="Phone inbox" width="260"> | <img src="screenshots_images/m2-phone-verification-code.png" alt="Phone verification code" width="260"> | <img src="screenshots_images/m3-phone-menu.png" alt="Phone menu" width="260"> |
+| <img src="screenshots_images/m4-phone-drive.png" alt="Phone Drive" width="260"> | <img src="screenshots_images/m5-phone-calendar.png" alt="Phone calendar" width="260"> | <img src="screenshots_images/m6-phone-aurora-theme.png" alt="Phone Aurora theme" width="260"> |
 
 ## How it fits together
 
@@ -87,7 +140,7 @@ Then, once:
 | `ALLOW_PUBLIC_REGISTRATION` | Default `0`: creating mailboxes over the API needs the admin key. Leave it off. |
 | `ALLOW_PRIVATE_IMAP_HOSTS` | Default `0`: the external IMAP bridge refuses private/local server addresses. |
 | `TRUSTED_PROXY_COUNT` | Number of reverse proxies in front of the web app (see Login security). |
-| `SESSION_HOURS` | How long a web login lasts (default 168). |
+| `SESSION_HOURS` | How long a web sign-in lasts without being used (default 168 = 7 days). Each person can get their own length under Setup > Users > Manage > *Stay signed in*. |
 | `WEB_BIND` / `WEB_PORT` | Which address and port the web app listens on. `127.0.0.1` (default) means only this server; `0.0.0.0` opens it to your network (needed when the reverse proxy is on another machine). |
 | `CORS_ORIGINS` | The public URL of the web app. |
 | `CHECK_SENDER_AUTH` | `1` (default) checks SPF, DKIM and DMARC on incoming mail and warns about fake senders. |
@@ -97,7 +150,7 @@ Then, once:
 | `SUBMISSION_BIND` | Address for the sending ports 587/465 (SMTP keys). Default `0.0.0.0`; `127.0.0.1` closes them to the outside. |
 | `SUBMISSION_ENABLED` | `0` turns the sending ports off completely. Default `1`. |
 | `DEFAULT_QUOTA_MB` | Storage per mailbox (mail + Drive) in MB, default 5120. `0` = unlimited. Changeable per user. |
-| `DRIVE_MAX_FILE_MB` / `ATTACH_FROM_DRIVE_MAX_MB` | Largest Drive upload (default 100 MB; a Cloudflare Tunnel allows at most 100 MB) and the most Drive files attached to one email (default 20 MB). |
+| `DRIVE_MAX_FILE_MB` / `ATTACH_FROM_DRIVE_MAX_MB` | Largest Drive file (default 10240 MB = 10 GB; uploads go in 16 MB parts, so Cloudflare's 100 MB request limit doesn't apply) and the most Drive files attached to one email (default 20 MB). Each person's storage quota still applies. |
 | `PUBLIC_URL` | The web app's public address, used in share links. Defaults to `CORS_ORIGINS`. |
 | `RELAY_HOURLY_LIMIT` / `RELAY_MAX_RCPTS` | Per SMTP key: messages per hour (default 100, can be changed per key) and recipients per message (default 50). |
 | `MESSAGE_TTL_DAYS` | `0` keeps mail forever. A number (e.g. `3`) auto-deletes old mail, handy for pure disposable use. |
@@ -497,7 +550,7 @@ In the web app you can add an existing Gmail/Outlook/Yahoo etc. account to read 
 - IMAP logins (port 993) are throttled too: an address is blocked for 15 minutes after 10 failed logins in 10 minutes (`IMAP_MAX_AUTH_FAILURES`, `IMAP_AUTH_WINDOW_SECONDS`, `IMAP_AUTH_BLOCK_SECONDS`; `0` turns it off). Passwords are stored as bcrypt hashes.
 - Request fields must be plain strings. Objects such as `{"$gt": ""}` are refused before they can reach a database query, and nothing in the project runs shell commands.
 - The session cookie is HttpOnly, SameSite=Strict, and Secure in production. The web app and bridge containers drop all Linux capabilities and cannot gain privileges. Non-root users and read-only filesystems are not enabled.
-- Sessions last `SESSION_HOURS` (default 168). They are recorded on the server (`viewer_data` volume), so logout, "Sign out all others" and ending a session on the Security page take effect immediately. Logout is POST only.
+- Sessions end after `SESSION_HOURS` (default 168) without use, or the person's own *Stay signed in* length. They are recorded on the server (`viewer_data` volume), so logout, "Sign out all others" and ending a session on the Security page take effect immediately. Logout is POST only.
 - Changing two-factor settings asks for the password again. The two-factor secret is stored encrypted with a key derived from `SECRET_KEY`; changing `SECRET_KEY` turns two-factor off in practice (see Troubleshooting).
 
 ## 14. Development and tests

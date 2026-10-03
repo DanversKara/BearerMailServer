@@ -168,22 +168,37 @@ class SecurityStore:
             self._cache = None
 
     # -- sessions --
-    def create_session(self, ip: str, user_agent: str, method: str, user: str = "") -> str:
+    # A sign-in stays valid as long as it is used: it ends after ``ttl`` seconds WITHOUT activity
+    # (each person's "Stay signed in" length, or SESSION_HOURS), not at a fixed time after signing in.
+    def _expired(self, info: dict, now: float) -> bool:
+        ttl = info.get("ttl") or self.session_seconds
+        return now - max(info.get("last_seen", 0), info.get("created", 0)) > ttl
+
+    def create_session(self, ip: str, user_agent: str, method: str, user: str = "", ttl: int | None = None) -> str:
         sid = secrets.token_urlsafe(24)
         now = time.time()
         with self.edit() as data:
             sessions = data.setdefault("sessions", {})
-            for key in [k for k, v in sessions.items() if now - v.get("created", 0) > self.session_seconds]:
+            for key in [k for k, v in sessions.items() if self._expired(v, now)]:
                 sessions.pop(key, None)
             sessions[sid] = {"created": now, "last_seen": now, "ip": ip[:64], "ua": (user_agent or "")[:200], "method": method,
-                             "user": (user or "")[:320]}
+                             "user": (user or "")[:320], "ttl": int(ttl or self.session_seconds)}
         return sid
 
     def session_valid(self, sid: str) -> bool:
         if not sid:
             return False
         info = self.read().get("sessions", {}).get(sid)
-        return bool(info) and time.time() - info.get("created", 0) <= self.session_seconds
+        return bool(info) and not self._expired(info, time.time())
+
+    def set_session_ttl(self, sid: str, ttl: int):
+        info = self.read().get("sessions", {}).get(sid)
+        if not info or info.get("ttl") == int(ttl):
+            return
+        with self.edit() as data:
+            entry = data.get("sessions", {}).get(sid)
+            if entry:
+                entry["ttl"] = int(ttl)
 
     def touch_session(self, sid: str, ip: str):
         info = self.read().get("sessions", {}).get(sid)
@@ -212,7 +227,7 @@ class SecurityStore:
         now = time.time()
         out = []
         for sid, info in self.read().get("sessions", {}).items():
-            if now - info.get("created", 0) > self.session_seconds:
+            if self._expired(info, now):
                 continue
             if user is not None and info.get("user", "") != user:
                 continue

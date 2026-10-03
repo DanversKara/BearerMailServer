@@ -132,21 +132,24 @@
         applyLang();
 
         (function () {
+            // A small menu (the list is too long for dots): grouped Light / Dark / Animated.
             var box = document.getElementById('theme-swatches');
             if (!box || !window.BearerTheme) return;
-            function draw() {
-                var cur = BearerTheme.get();
-                box.innerHTML = '';
+            var sel = document.createElement('select');
+            sel.className = 'form-select form-select-sm login-theme-select';
+            sel.setAttribute('aria-label', 'Theme');
+            [['light', 'Light'], ['dark', 'Dark'], ['animated', 'Animated']].forEach(function (g) {
+                var og = document.createElement('optgroup'); og.label = g[1];
                 BearerTheme.list.forEach(function (t) {
-                    var b = document.createElement('button');
-                    b.type = 'button'; b.title = t.name; b.setAttribute('aria-label', t.name);
-                    b.className = 'swatch-btn' + (t.id === cur ? ' active' : '');
-                    b.style.background = 'linear-gradient(135deg,' + t.swatch[0] + ' 0 50%,' + t.swatch[1] + ' 50% 100%)';
-                    b.onclick = function () { BearerTheme.set(t.id); draw(); };
-                    box.appendChild(b);
+                    if ((t.group || (t.dark ? 'dark' : 'light')) !== g[0]) return;
+                    var o = document.createElement('option'); o.value = t.id; o.textContent = t.name; og.appendChild(o);
                 });
-            }
-            draw();
+                if (og.children.length) sel.appendChild(og);
+            });
+            sel.value = BearerTheme.get();
+            sel.onchange = function () { BearerTheme.set(sel.value); };
+            box.innerHTML = '<i class="bi bi-palette me-1" aria-hidden="true"></i>';
+            box.appendChild(sel);
         })();
     </script>
 </body>

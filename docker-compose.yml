@@ -68,7 +68,7 @@ services:
       # Storage per mailbox (mail + Drive), in MB; 0 = unlimited. Changeable per user under Setup > Users.
       - DEFAULT_QUOTA_MB=${DEFAULT_QUOTA_MB:-5120}
       - MAIL_FLOOD_THRESHOLD=${MAIL_FLOOD_THRESHOLD:-30}
-      - DRIVE_MAX_FILE_MB=${DRIVE_MAX_FILE_MB:-100}
+      - DRIVE_MAX_FILE_MB=${DRIVE_MAX_FILE_MB:-10240}
       - ATTACH_FROM_DRIVE_MAX_MB=${ATTACH_FROM_DRIVE_MAX_MB:-20}
     # The same certificate as the IMAP server (port 993). Ports 587/465 need it; to also offer STARTTLS on
     # port 25, set SMTP_TLS_CERT=/certs/fullchain.pem and SMTP_TLS_KEY=/certs/privkey.pem in .env.
@@ -117,7 +117,7 @@ services:
       - ALLOW_EMERGENCY_ADMIN=${ALLOW_EMERGENCY_ADMIN:-0}
       # Address used in share links (/s/...). Defaults to CORS_ORIGINS, else the address the browser used.
       - PUBLIC_URL=${PUBLIC_URL:-${CORS_ORIGINS:-}}
-      - DRIVE_MAX_FILE_MB=${DRIVE_MAX_FILE_MB:-100}
+      - DRIVE_MAX_FILE_MB=${DRIVE_MAX_FILE_MB:-10240}
     volumes:
       - viewer_data:/data
     healthcheck:

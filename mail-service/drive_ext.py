@@ -38,7 +38,13 @@ logger = logging.getLogger("bearermail.drive")
 
 CHUNK = 1024 * 1024
 DEFAULT_QUOTA_MB = max(0, int(os.getenv("DEFAULT_QUOTA_MB", "5120")))
-DRIVE_MAX_FILE_MB = max(1, int(os.getenv("DRIVE_MAX_FILE_MB", "100")))
+# Big files are uploaded in parts (see /uploads below), so the size limit is no longer tied to what one web
+# request (or Cloudflare's 100 MB request cap) allows. Each person's storage quota still applies.
+DRIVE_MAX_FILE_MB = max(1, int(os.getenv("DRIVE_MAX_FILE_MB", "10240")))
+UPLOAD_PART_MB = min(64, max(1, int(os.getenv("DRIVE_UPLOAD_PART_MB", "16"))))
+UPLOAD_PART = UPLOAD_PART_MB * 1024 * 1024
+STALE_UPLOAD_HOURS = 24
+_DONE = {"complete": {"$ne": False}}  # unfinished uploads are invisible until finished
 ATTACH_FROM_DRIVE_MAX_MB = max(1, int(os.getenv("ATTACH_FROM_DRIVE_MAX_MB", "20")))
 MAX_FOLDER_DEPTH = 10
 
@@ -135,7 +141,7 @@ def _unique_name(owner: str, folder: str, name: str, skip_id=None) -> str:
 
 def _file(owner: str, file_id: str) -> dict:
     try:
-        f = _db().drive_files.find_one({"_id": ObjectId(file_id), "owner": owner})
+        f = _db().drive_files.find_one({"_id": ObjectId(file_id), "owner": owner, **_DONE})
     except Exception:
         f = None
     if not f:
@@ -166,16 +172,45 @@ def quota_bytes(acc: dict) -> int:
     return mb * 1024 * 1024
 
 
+def part_limit(acc: dict, field: str):
+    """A separate Drive / mailbox limit in bytes, or None when only the total applies.
+    drive_quota_mb = 0 means no Drive space at all; mail_quota_mb is at least 1 MB."""
+    mb = acc.get(field)
+    return mb * 1024 * 1024 if isinstance(mb, int) and mb >= 0 else None
+
+
+def mail_usage(acc: dict) -> int:
+    return _sum(_db().messages, {"to_addresses": {"$in": users_ext._addresses_for(acc["address"])}}, "size")
+
+
+def mail_full(acc: dict) -> bool:
+    """Only for mailboxes the admin gave a mailbox limit: new mail is refused once it is reached."""
+    limit = part_limit(acc, "mail_quota_mb")
+    return bool(limit) and mail_usage(acc) >= limit
+
+
 def usage(acc: dict) -> dict:
     db = _db()
-    addresses = users_ext._addresses_for(acc["address"])
-    mail = _sum(db.messages, {"to_addresses": {"$in": addresses}}, "size")
+    mail = mail_usage(acc)
     drive = _sum(db.drive_files, {"owner": acc["address"]}, "size")
     quota = quota_bytes(acc)
     used = mail + drive
+    dq, mq = part_limit(acc, "drive_quota_mb"), part_limit(acc, "mail_quota_mb")
+    pct = lambda a, b: round(a * 100 / b, 1) if b else 0  # noqa: E731
     return {"address": acc["address"], "mail": mail, "drive": drive, "used": used, "quota": quota,
-            "percent": round(used * 100 / quota, 1) if quota else 0, "unlimited": quota == 0,
-            "full": bool(quota) and used >= quota}
+            "percent": pct(used, quota), "unlimited": quota == 0,
+            "full": bool(quota) and used >= quota,
+            "drive_quota": dq, "drive_percent": pct(drive, dq) if dq else (100 if dq == 0 else None),
+            "drive_full": dq is not None and drive >= dq,
+            "mail_quota": mq, "mail_percent": pct(mail, mq) if mq else None, "mail_full": bool(mq) and mail >= mq}
+
+
+def _drive_room(u: dict, extra: int):
+    if u["drive_quota"] == 0:
+        raise HTTPException(status_code=507, detail="Drive is turned off for your account. Ask your admin for Drive space.")
+    if u["drive_quota"] is not None and u["drive"] + extra > u["drive_quota"]:
+        raise HTTPException(status_code=507, detail=f"Your Drive limit ({u['drive_quota'] // (1024 * 1024):,} MB) is reached. "
+                                                    "Delete files, or ask your admin for more Drive space.")
 
 
 @router.get("/admin/storage/{address}")
@@ -198,6 +233,7 @@ def set_quota(address: str, body: dict = Body(...)):
 
 def _room_for(acc: dict, extra: int):
     u = usage(acc)
+    _drive_room(u, extra)
     if u["quota"] and u["used"] + extra > u["quota"]:
         raise HTTPException(status_code=507, detail="Your storage is full. Delete files or old mail, or ask your admin for more space.")
     return u
@@ -218,21 +254,21 @@ def list_drive(address: str, folder: str = "/"):
     pattern = "^" + re.escape(prefix + "/") + "[^/]+"
     for doc in db.drive_folders.find({"owner": owner, "path": {"$regex": pattern}}, {"path": 1}):
         sub.add(doc["path"][len(prefix) + 1:].split("/")[0])
-    for doc in db.drive_files.find({"owner": owner, "folder": {"$regex": pattern}}, {"folder": 1}):
+    for doc in db.drive_files.find({"owner": owner, "folder": {"$regex": pattern}, **_DONE}, {"folder": 1}):
         sub.add(doc["folder"][len(prefix) + 1:].split("/")[0])
-    files = [_public_file(f) for f in db.drive_files.find({"owner": owner, "folder": folder}).sort("name", 1)]
+    files = [_public_file(f) for f in db.drive_files.find({"owner": owner, "folder": folder, **_DONE}).sort("name", 1)]
     parts = [p for p in folder.split("/") if p]
     crumbs = [{"name": "My Drive", "path": "/"}] + [{"name": p, "path": "/" + "/".join(parts[:i + 1])} for i, p in enumerate(parts)]
     return {"owner": owner, "folder": folder, "breadcrumbs": crumbs,
             "folders": [{"name": n, "path": (prefix + "/" + n)} for n in sorted(sub, key=str.lower)],
-            "files": files, "storage": usage(acc), "max_file_mb": DRIVE_MAX_FILE_MB}
+            "files": files, "storage": usage(acc), "max_file_mb": DRIVE_MAX_FILE_MB, "part_mb": UPLOAD_PART_MB}
 
 
 @router.get("/admin/drive/{address}/all")
 def all_files(address: str, q: str = ""):
     """Every file (for the Compose picker), newest first, optionally filtered by name."""
     owner = owner_of(address)["address"]
-    query = {"owner": owner}
+    query = {"owner": owner, **_DONE}
     if q:
         query["name"] = {"$regex": re.escape(q[:100]), "$options": "i"}
     return {"files": [_public_file(f) for f in _db().drive_files.find(query).sort("updated_at", -1).limit(200)]}
@@ -351,6 +387,103 @@ async def upload(address: str, request: Request, name: str = "", folder: str = "
         raise
     db.drive_files.update_one({"_id": fid}, {"$set": {"size": size, "sha256": digest.hexdigest(), "complete": True}})
     return _public_file(db.drive_files.find_one({"_id": fid}))
+
+
+# ---------------------------------------------------------------------------
+# Big files: start an upload, send it in parts (each well under Cloudflare's 100 MB request limit),
+# then finish it. A part that failed half way can simply be sent again.
+# ---------------------------------------------------------------------------
+
+def _sweep_stale_uploads(owner: str):
+    cutoff = _now() - timedelta(hours=STALE_UPLOAD_HOURS)
+    for f in _db().drive_files.find({"owner": owner, "complete": False, "updated_at": {"$lt": cutoff}}, {"_id": 1}):
+        _delete_file_data(f["_id"])
+
+
+def _upload_doc(owner: str, upload_id: str) -> dict:
+    try:
+        f = _db().drive_files.find_one({"_id": ObjectId(upload_id), "owner": owner, "complete": False})
+    except Exception:
+        f = None
+    if not f or "upload" not in f:
+        raise HTTPException(status_code=404, detail="Upload not found (it may have expired). Start it again.")
+    return f
+
+
+@router.post("/admin/drive/{address}/uploads", status_code=201)
+def start_upload(address: str, body: dict = Body(...)):
+    acc = owner_of(address)
+    owner = acc["address"]
+    try:
+        size = int(body.get("size"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="size is required") from None
+    if size < 0:
+        raise HTTPException(status_code=422, detail="size is required")
+    if size > DRIVE_MAX_FILE_MB * 1024 * 1024:
+        raise HTTPException(status_code=413, detail=f"Files can be at most {DRIVE_MAX_FILE_MB:,} MB")
+    _sweep_stale_uploads(owner)
+    _room_for(acc, size)
+    folder = clean_folder(body.get("folder"))
+    now = _now()
+    doc = {"owner": owner, "folder": folder, "name": _unique_name(owner, folder, clean_name(body.get("name"), "file")),
+           "size": 0, "content_type": (str(body.get("content_type") or "") or "application/octet-stream")[:100],
+           "created_at": now, "updated_at": now, "source": {"kind": "upload"}, "complete": False,
+           "upload": {"expected": size, "parts": 0, "chunks": 0}}
+    fid = _db().drive_files.insert_one(doc).inserted_id
+    return {"upload_id": str(fid), "part_size": UPLOAD_PART, "parts": max(1, -(-size // UPLOAD_PART)), "name": doc["name"]}
+
+
+@router.put("/admin/drive/{address}/uploads/{upload_id}")
+async def upload_part(address: str, upload_id: str, request: Request, part: int = 0):
+    acc = owner_of(address)
+    f = _upload_doc(acc["address"], upload_id)
+    up = f["upload"]
+    if part < up["parts"]:
+        return {"received": f["size"], "parts": up["parts"], "duplicate": True}  # a retry of a part we already have
+    if part != up["parts"]:
+        raise HTTPException(status_code=409, detail=f"Expected part {up['parts']}, got {part}")
+    db = _db()
+    db.drive_chunks.delete_many({"file_id": f["_id"], "n": {"$gte": up["chunks"]}})  # leftovers of a failed try
+    buf = bytearray()
+    async for piece in request.stream():
+        buf.extend(piece)
+        if len(buf) > UPLOAD_PART:
+            raise HTTPException(status_code=413, detail=f"A part can be at most {UPLOAD_PART_MB} MB")
+    if not buf:
+        raise HTTPException(status_code=422, detail="Empty part")
+    if f["size"] + len(buf) > up["expected"]:
+        raise HTTPException(status_code=422, detail="More data than the file size given at the start")
+    u = usage(acc)
+    _drive_room(u, len(buf))
+    if u["quota"] and u["used"] + len(buf) > u["quota"]:
+        raise HTTPException(status_code=507, detail="Your storage is full. Delete files or old mail, or ask your admin for more space.")
+    n = up["chunks"]
+    for i in range(0, len(buf), CHUNK):
+        db.drive_chunks.insert_one({"file_id": f["_id"], "n": n, "data": bytes(buf[i:i + CHUNK])})
+        n += 1
+    db.drive_files.update_one({"_id": f["_id"]}, {"$inc": {"size": len(buf)},
+                                                 "$set": {"upload.parts": up["parts"] + 1, "upload.chunks": n, "updated_at": _now()}})
+    return {"received": f["size"] + len(buf), "parts": up["parts"] + 1}
+
+
+@router.post("/admin/drive/{address}/uploads/{upload_id}/finish")
+def finish_upload(address: str, upload_id: str):
+    acc = owner_of(address)
+    f = _upload_doc(acc["address"], upload_id)
+    if f["size"] != f["upload"]["expected"]:
+        raise HTTPException(status_code=409, detail=f"Only {f['size']:,} of {f['upload']['expected']:,} bytes arrived")
+    _db().drive_files.update_one({"_id": f["_id"]}, {"$set": {"complete": True, "updated_at": _now()},
+                                                    "$unset": {"upload": ""}})
+    return _public_file(_db().drive_files.find_one({"_id": f["_id"]}))
+
+
+@router.delete("/admin/drive/{address}/uploads/{upload_id}")
+def cancel_upload(address: str, upload_id: str):
+    acc = owner_of(address)
+    f = _upload_doc(acc["address"], upload_id)
+    _delete_file_data(f["_id"])
+    return {"cancelled": True}
 
 
 def file_bytes(owner: str, file_id: str) -> tuple[dict, bytes]:
@@ -653,7 +786,7 @@ def _target_name(kind: str, owner: str, target_id: str) -> str:
     except Exception:
         return ""
     if kind == "file":
-        f = db.drive_files.find_one({"_id": oid, "owner": owner})
+        f = db.drive_files.find_one({"_id": oid, "owner": owner, **_DONE})
         return f["name"] if f else ""
     e = db.events.find_one({"_id": oid, "owner": owner})
     return e.get("title", "") if e else ""
@@ -761,7 +894,7 @@ def resolve_share(code: str):
     owner_acc = _db().accounts.find_one({"address": s["owner"]}) or {}
     info["shared_by"] = owner_acc.get("display_name") or s["owner"]
     if s["kind"] == "file":
-        f = _db().drive_files.find_one({"_id": ObjectId(s["target_id"])})
+        f = _db().drive_files.find_one({"_id": ObjectId(s["target_id"]), **_DONE})
         info.update(size=f.get("size", 0), content_type=f.get("content_type", ""))
     else:
         import calendar_ext
@@ -792,7 +925,7 @@ def share_content(code: str):
     s = _live_share(code)
     _db().shares.update_one({"_id": s["_id"]}, {"$inc": {"downloads": 1}})
     if s["kind"] == "file":
-        f = _db().drive_files.find_one({"_id": ObjectId(s["target_id"])})
+        f = _db().drive_files.find_one({"_id": ObjectId(s["target_id"]), **_DONE})
         return stream_file(f)
     import calendar_ext
     e = _db().events.find_one({"_id": ObjectId(s["target_id"])})
