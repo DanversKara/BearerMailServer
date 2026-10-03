@@ -125,7 +125,9 @@ _SMTP_RCPT_RATE_MAX = int(os.getenv("SMTP_RCPT_RATE_MAX", "100"))
 _SMTP_DATA_RATE_WINDOW = int(os.getenv("SMTP_DATA_RATE_WINDOW", "60"))
 _SMTP_DATA_RATE_MAX = int(os.getenv("SMTP_DATA_RATE_MAX", "20"))
 _SMTP_MAX_RCPTS_PER_MESSAGE = int(os.getenv("SMTP_MAX_RCPTS_PER_MESSAGE", "20"))
-_SMTP_MAX_MESSAGE_BYTES = int(os.getenv("SMTP_MAX_MESSAGE_BYTES", str(1024 * 1024)))
+# Largest incoming email. Stored as one MongoDB document (16 MB cap), and attachments shrink by ~25 % when
+# decoded from base64, so 20 MB raw stays safely under it while fitting ordinary photos and PDFs.
+_SMTP_MAX_MESSAGE_BYTES = min(int(os.getenv("SMTP_MAX_MESSAGE_BYTES", str(20 * 1024 * 1024))), 20 * 1024 * 1024)
 _SMTP_MAX_ADDRESS_LENGTH = int(os.getenv("SMTP_MAX_ADDRESS_LENGTH", "320"))
 _SMTP_BLACKLIST_IPS = {item.strip() for item in os.getenv("SMTP_BLACKLIST_IPS", "").split(",") if item.strip()}
 _SMTP_BLACKLIST_SENDERS = {item.strip().lower() for item in os.getenv("SMTP_BLACKLIST_SENDERS", "").split(",") if item.strip()}

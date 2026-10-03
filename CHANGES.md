@@ -1,5 +1,12 @@
 # BearerMail changes
 
+## Incoming mail size limit raised from 1 MB to 20 MB
+
+- **Important:** the old default (`SMTP_MAX_MESSAGE_BYTES=1048576`) refused every incoming email over 1 MB, so photos,
+  PDFs and other attachments bounced back to the sender. The new default is **20 MB** (the most a single stored email can
+  safely be). If your `.env` has `SMTP_MAX_MESSAGE_BYTES=1048576`, change it to `20971520` (the config checker now warns).
+- Drive's Excel/PowerPoint files no longer show a Word icon.
+
 ## Big Drive files, stay signed in, tab counts, themes
 
 - **Drive files up to 10 GB** (`DRIVE_MAX_FILE_MB`, default 10240). Uploads go in 16 MB parts

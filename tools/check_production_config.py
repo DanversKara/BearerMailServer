@@ -143,11 +143,14 @@ def main() -> int:
         errors.append("MESSAGE_TTL_DAYS must be a positive integer, or 0/forever to disable cleanup")
 
     try:
-        max_message_bytes = int(env.get("SMTP_MAX_MESSAGE_BYTES", "1048576"))
+        max_message_bytes = int(env.get("SMTP_MAX_MESSAGE_BYTES", "20971520"))
         if max_message_bytes < 1:
             errors.append("SMTP_MAX_MESSAGE_BYTES must be positive")
-        elif max_message_bytes > 10 * 1024 * 1024:
-            warnings.append("SMTP_MAX_MESSAGE_BYTES is above 10 MiB; monitor MongoDB storage and attachment growth")
+        elif max_message_bytes < 10 * 1024 * 1024:
+            warnings.append(f"SMTP_MAX_MESSAGE_BYTES is only {max_message_bytes // 1024} KB: emails with photos or PDFs above that "
+                            "are refused and the sender gets a bounce. 20971520 (20 MB) is recommended")
+        elif max_message_bytes > 20 * 1024 * 1024:
+            warnings.append("SMTP_MAX_MESSAGE_BYTES is above 20 MB; BearerMail caps it at 20 MB (MongoDB's 16 MB document limit)")
     except ValueError:
         errors.append("SMTP_MAX_MESSAGE_BYTES must be an integer byte count")
 

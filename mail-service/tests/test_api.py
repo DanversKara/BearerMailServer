@@ -1,6 +1,7 @@
 """Tests for mail-service REST API endpoints."""
 
 import asyncio
+import os
 from email.message import EmailMessage
 from types import SimpleNamespace
 
@@ -352,3 +353,21 @@ def test_unread_empty_trash_and_delete_sent(client, test_account, mock_mongo):
     other = str(mock_mongo.sent_messages.insert_one({"from_address": "someone@else.test", "to": ["x@y.example"], "subject": "s", "created_at": now}).inserted_id)
     assert client.post("/sent/batch", headers=h, json={"action": "delete", "message_ids": [sid, other]}).json()["count"] == 1
     assert mock_mongo.sent_messages.count_documents({}) == 1
+
+
+def test_emails_with_big_attachments_are_accepted(client, test_account, mock_mongo):
+    """A 5 MB photo used to bounce (the old 1 MB limit); the default now allows 20 MB."""
+    import app as svc
+    from app import MailHandler
+    address = test_account[0]
+    mail = EmailMessage()
+    mail["From"] = "Friend <friend@external.com>"
+    mail["To"] = address
+    mail["Subject"] = "Holiday photos"
+    mail.set_content("Here they are")
+    mail.add_attachment(os.urandom(5 * 1024 * 1024), maintype="image", subtype="jpeg", filename="beach.jpg")
+    assert svc._SMTP_MAX_MESSAGE_BYTES >= 20 * 1024 * 1024
+    envelope = SimpleNamespace(content=mail.as_bytes(), rcpt_tos=[address], mail_from="friend@external.com")
+    session = SimpleNamespace(peer=("127.0.0.1", 25000), rcpt_count=1, mail_from="friend@external.com")
+    assert asyncio.run(MailHandler().handle_DATA(None, session, envelope)).startswith("250")
+    assert mock_mongo.messages.find_one({"subject": "Holiday photos"})["attachments"][0]["size"] == 5 * 1024 * 1024
