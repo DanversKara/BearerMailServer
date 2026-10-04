@@ -37,7 +37,7 @@
   }
 
   let host = null;
-  const U = { users: null, domains: [], openUser: null, setup: null, codes: null, view: null, aliasInfo: null, sending: null, presets: [] };
+  const U = { users: null, domains: [], invites: [], signupMode: 'invite', openUser: null, setup: null, codes: null, view: null, aliasInfo: null, sending: null, presets: [] };
 
   function rerender() {
     if (!host || !host.isConnected) return;
@@ -58,9 +58,11 @@
   async function renderUsers(el) {
     host = el; U.view = 'users';
     el.innerHTML = '<div class="text-muted py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading...</div>';
-    const [users, domains] = await Promise.all([run(() => call('GET', '/api/users')), run(() => call('GET', '/api/admin/domains'))]);
+    const [users, domains, invites, signupMode] = await Promise.all([run(() => call('GET', '/api/users')), run(() => call('GET', '/api/admin/domains')), run(() => call('GET', '/api/admin/invites')), run(() => call('GET', '/api/admin/signup/mode'))]);
     if (!users || !el.isConnected) return;
     U.users = users; U.domains = ((domains && domains.domains) || []).filter((d) => d.is_active !== false).map((d) => d.domain);
+    U.invites = (invites && invites.invites) || [];
+    U.signupMode = (signupMode && signupMode.mode) || 'invite';
     const multi = users.mode === 'multi';
     const list = users.users || [];
     const shared = users.shared_smtp_providers || [];
@@ -157,6 +159,46 @@
       </div>`;
     }).join('');
 
+    /* ---- Invite codes: people sign themselves up at /signup?code=... ---- */
+    const invStatusBadge = { 'active': 'success', 'used up': 'secondary', 'expired': 'warning', 'revoked': 'danger' };
+    const inviteRows = U.invites.map((inv) => `
+      <div class="d-flex flex-wrap align-items-center gap-2 border rounded px-2 py-2 mb-2">
+        <code class="fw-bold">${esc(inv.code)}</code>
+        <span class="badge text-bg-${invStatusBadge[inv.status] || 'secondary'}">${esc(inv.status)}</span>
+        <span class="small text-muted">${inv.uses}/${inv.max_uses} used${inv.expires_at ? ' · expires ' + esc(new Date(inv.expires_at).toLocaleDateString()) : ' · never expires'}</span>
+        ${inv.note ? `<span class="small fst-italic">“${esc(inv.note)}”</span>` : ''}
+        ${inv.used_by && inv.used_by.length ? `<span class="small text-muted">${esc(inv.used_by.join(', '))}</span>` : ''}
+        <span class="ms-auto d-flex gap-1">
+          ${inv.status === 'active' ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-inv-copy="${esc(inv.code)}" title="Copy the sign-up link"><i class="bi bi-link-45deg me-1"></i>Copy link</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-inv-revoke="${esc(inv.code)}">Revoke</button>` : ''}
+        </span>
+      </div>`).join('');
+
+    const invitesCard = `
+      <div class="card mt-3"><div class="card-header"><i class="bi bi-ticket-perforated me-1"></i>Invite codes & sign-up</div><div class="card-body">
+        <div class="row g-2 align-items-end mb-1">
+          <div class="col-md-5"><label class="form-label small mb-1">Who can sign up at <a href="/signup" target="_blank" rel="noopener">/signup</a></label>
+            <select class="form-select form-select-sm" data-inv-mode>
+              <option value="invite"${U.signupMode === 'invite' ? ' selected' : ''}>Invite code required</option>
+              <option value="open"${U.signupMode === 'open' ? ' selected' : ''}>Open — anyone can sign up</option>
+              <option value="closed"${U.signupMode === 'closed' ? ' selected' : ''}>Off — nobody can sign up</option>
+            </select></div>
+        </div>
+        <p class="small text-muted">Let people create their own account: they pick their email address and password themselves.
+          ${U.signupMode === 'invite' ? 'Send them an invite code and the sign-up link below.' : ''}
+          ${U.signupMode === 'open' ? 'Right now <b>anyone</b> can create an account — switch back to invite codes when you have enough people.' : ''}
+          ${U.signupMode === 'closed' ? 'The sign-up page currently refuses everyone.' : ''}</p>
+        ${U.signupMode === 'invite' ? `
+        <div class="row g-2 align-items-end mb-3">
+          <div class="col-md-4"><label class="form-label small mb-1">Note (who is it for)</label><input class="form-control form-control-sm" data-inv-note placeholder="Jane"></div>
+          <div class="col-md-2"><label class="form-label small mb-1">Uses</label><input type="number" min="1" max="10000" class="form-control form-control-sm" data-inv-uses value="1"></div>
+          <div class="col-md-3"><label class="form-label small mb-1">Expires in (days)</label><input type="number" min="0" max="3650" class="form-control form-control-sm" data-inv-expires value="7" title="Empty = never expires"></div>
+          <div class="col-md-3"><button type="button" class="btn btn-sm btn-primary" data-inv-add><i class="bi bi-plus-lg me-1"></i>Create invite</button></div>
+        </div>
+        ${inviteRows || empty('No invite codes yet.')}
+        ` : ''}
+      </div></div>`;
+
     el.innerHTML = `${modeCard}${requiredCard}
       <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">Users (${list.length})</h6></div>
       ${cards || empty('No mailboxes yet.')}
@@ -169,7 +211,8 @@
           <div class="col-md-3"><label class="form-label small mb-1">Display name</label><input class="form-control form-control-sm" data-u-newname placeholder="Jane Doe"></div>
           <div class="col-12"><button type="button" class="btn btn-sm btn-primary" data-u-add><i class="bi bi-person-plus me-1"></i>Create user</button>
             <span class="small text-muted ms-2">New users can send and create aliases; change that with Manage.</span></div>
-        </div></div></div>`;
+        </div></div></div>
+      ${invitesCard}`;
   }
 
   const SESSION_DAYS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [90, '3 months'], [180, '6 months'], [365, '1 year']];
@@ -365,6 +408,11 @@
         host.querySelector('[data-m-appoff]').classList.remove('d-none');
       }
     }
+    if (host && host.contains(ev.target) && ev.target.matches('[data-inv-mode]')) {
+      const mode = ev.target.value;
+      run(async () => { await call('POST', '/api/admin/signup/mode', { mode }); U.signupMode = mode; toast('Sign-up mode saved'); await renderUsers(host); });
+      return;
+    }
     if (host && host.contains(ev.target) && ev.target.matches('[data-u-required]')) {
       const on = ev.target.checked;
       run(async () => { await call('POST', '/api/users/app-passwords-required', { required: on }); toast(on ? 'Mail apps now need app passwords for everyone' : 'Each person decides again'); await renderUsers(host); });
@@ -416,6 +464,27 @@
       window.alert(`User created.\n\nEmail: ${address}\nPassword: ${password}\n\nGive these to the person. They can change the password under My account.`);
       U.openUser = address; await renderUsers(host); sidebar();
     });
+
+    // ---- Invite codes
+    if (d.invAdd !== undefined) return run(async () => {
+      const note = val('[data-inv-note]');
+      const uses = Math.min(10000, Math.max(1, parseInt(val('[data-inv-uses]') || '1', 10) || 1));
+      const expRaw = val('[data-inv-expires]');
+      const expires_in_days = expRaw === '' ? null : Math.min(3650, Math.max(0, parseFloat(expRaw) || 0));
+      const r = await call('POST', '/api/admin/invites', { note, max_uses: uses, expires_in_days });
+      const link = `${location.origin}/signup?code=${encodeURIComponent(r.code)}`;
+      if (window.copyText) window.copyText(link, ev); else window.prompt('Sign-up link (copy it):', link);
+      toast(`Invite created${window.copyText ? ' — sign-up link copied' : ''}`);
+      await renderUsers(host);
+    });
+    if (d.invRevoke) return confirm({ title: 'Revoke this invite?', message: `The code ${d.invRevoke} stops working at once. Accounts already created with it are not affected.`, okLabel: 'Revoke',
+      onConfirm: () => run(async () => { await call('DELETE', `/api/admin/invites/${encodeURIComponent(d.invRevoke)}`); toast('Invite revoked'); await renderUsers(host); }) });
+    if (d.invCopy) {
+      const link = `${location.origin}/signup?code=${encodeURIComponent(d.invCopy)}`;
+      if (window.copyText) { window.copyText(link, ev); toast('Sign-up link copied'); }
+      else window.prompt('Sign-up link (copy it):', link);
+      return;
+    }
 
     // ---- My account
     if (d.mChangepw !== undefined) return run(async () => {

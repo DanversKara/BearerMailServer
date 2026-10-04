@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>BearerMail - Sign up</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    <link href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='vendor/fonts/satisfy.css') }}" rel="stylesheet">
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <style>
+        :root {
+            --primary-color: #5b9a8b;
+            --primary-hover: #4a8a7b;
+            --primary-rgb: 91,154,139;
+            --brand-color: #2a5f8a;
+            --card-bg: #ffffff;
+            --text-color: #1a2421;
+            --page-gradient: linear-gradient(135deg, #ffffff 0%, #f7fbf9 50%, #ffffff 100%);
+            --shadow: 0 4px 20px rgba(91,154,139,0.15);
+        }
+        body {
+            background: var(--page-gradient);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            max-width: 440px;
+            width: calc(100% - 32px);
+            margin: 16px;
+            padding: clamp(24px, 6vw, 40px);
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+        }
+        .login-title {
+            font-family: 'Satisfy', cursive;
+            color: var(--brand-color);
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .btn-primary {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(var(--primary-rgb),0.15);
+        }
+    </style>
+    <link href="{{ url_for('static', filename='theme.css') }}" rel="stylesheet">
+</head>
+<body>
+
+    <div class="login-theme" id="theme-swatches" role="group" aria-label="Theme"></div>
+
+    <div class="login-card">
+        <h1 class="login-title">
+            {% if has_login_logo %}{% if brand_login.light %}<img class="login-logo logo-for-light" src="{{ brand_login.light }}" alt="BearerMail">{% endif %}{% if brand_login.dark %}<img class="login-logo logo-for-dark" src="{{ brand_login.dark }}" alt="BearerMail">{% endif %}{% else %}<i class="bi bi-envelope me-2"></i>BearerMail{% endif %}
+        </h1>
+
+        <div id="signup-alert"></div>
+
+        {% if mode == 'closed' %}
+        <div class="alert alert-info" role="alert">
+            <i class="bi bi-info-circle me-2"></i>Sign-ups are disabled. Ask your admin for an account.
+        </div>
+        <a class="btn btn-primary w-100" href="{{ url_for('login_page') }}"><i class="bi bi-box-arrow-in-right me-2"></i>Sign in</a>
+        {% else %}
+        <form id="signup-form" autocomplete="off" data-mode="{{ mode }}">
+            <p class="small text-muted mb-3"><i class="bi bi-ticket-perforated me-1"></i>{% if mode == 'open' %}Create your account below — no invite code needed.{% else %}You'll need an invite code from your admin to create an account.{% endif %}</p>
+            {% if mode == 'invite' %}
+            <div class="mb-3">
+                <label class="form-label" for="code">Invite code</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-ticket-perforated"></i></span>
+                    <input type="text" class="form-control" id="code" name="code" value="{{ code or '' }}" placeholder="XXXX-XXXX-XXXX-XXXX" autocapitalize="characters" spellcheck="false" {% if not code %}autofocus{% endif %} required>
+                </div>
+            </div>
+            {% endif %}
+            <div class="mb-3">
+                <label class="form-label" for="localpart">Email address</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                    <input type="text" class="form-control" id="localpart" name="localpart" placeholder="you" autocapitalize="off" spellcheck="false" {% if code %}autofocus{% endif %} required>
+                    <select class="form-select" id="domain" name="domain" style="max-width: 45%" required>
+                        {% for d in domains %}<option value="{{ d }}">@{{ d }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="password">Password <span class="text-muted">(10+ characters)</span></label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-key"></i></span>
+                    <input type="password" class="form-control" id="password" name="password" placeholder="Choose a password" autocomplete="new-password" minlength="10" required>
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="form-label" for="password2">Repeat password</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
+                    <input type="password" class="form-control" id="password2" name="password2" placeholder="Repeat it" autocomplete="new-password" minlength="10" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="signup-btn">
+                <i class="bi bi-person-plus me-2"></i>Create my account
+            </button>
+            <a class="d-block text-center small mt-3" href="{{ url_for('login_page') }}">Already have an account? Sign in</a>
+        </form>
+        {% endif %}
+    </div>
+
+    <script>
+        (function () {
+            'use strict';
+            var form = document.getElementById('signup-form');
+            var alertBox = document.getElementById('signup-alert');
+            var btn = document.getElementById('signup-btn');
+
+            function showError(msg) {
+                alertBox.innerHTML = '<div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-triangle me-2"></i>' +
+                    msg.replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }) + '</div>';
+            }
+            function showSuccess(address) {
+                document.querySelector('.login-card').innerHTML =
+                    '<h1 class="login-title"><i class="bi bi-envelope-check me-2"></i>Welcome!</h1>' +
+                    '<div class="alert alert-success" role="alert"><i class="bi bi-check-circle me-2"></i>Your mailbox <b>' +
+                    address.replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }) +
+                    '</b> is ready.</div>' +
+                    '<a class="btn btn-primary w-100" href="/login"><i class="bi bi-box-arrow-in-right me-2"></i>Sign in</a>';
+            }
+
+            form.addEventListener('submit', async function (ev) {
+                ev.preventDefault();
+                alertBox.innerHTML = '';
+                var mode = form.getAttribute('data-mode') || 'invite';
+                var codeEl = document.getElementById('code');
+                var code = codeEl ? codeEl.value.trim() : '';
+                var localpart = document.getElementById('localpart').value.trim().toLowerCase();
+                var domain = document.getElementById('domain').value;
+                var pw = document.getElementById('password').value;
+                var pw2 = document.getElementById('password2').value;
+                if ((mode === 'invite' && !code) || !localpart || !domain || !pw) { showError('Fill in every field.'); return; }
+                if (pw.length < 10) { showError('Choose a password of at least 10 characters.'); return; }
+                if (pw !== pw2) { showError('The two passwords do not match.'); return; }
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating...';
+                try {
+                    var res = await fetch('/api/signup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: code, address: localpart + '@' + domain, password: pw })
+                    });
+                    var data = await res.json().catch(function () { return {}; });
+                    if (!res.ok || data.success === false) { showError(data.message || 'Sign-up failed, please try again.'); return; }
+                    showSuccess(data.address || (localpart + '@' + domain));
+                } catch (e) {
+                    showError('Could not reach the server, please try again.');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-person-plus me-2"></i>Create my account';
+                }
+            });
+
+            // Theme picker (same as the login page).
+            var box = document.getElementById('theme-swatches');
+            if (box && window.BearerTheme) {
+                var sel = document.createElement('select');
+                sel.className = 'form-select form-select-sm login-theme-select';
+                sel.setAttribute('aria-label', 'Theme');
+                [['light', 'Light'], ['dark', 'Dark'], ['animated', 'Animated']].forEach(function (g) {
+                    var og = document.createElement('optgroup'); og.label = g[1];
+                    BearerTheme.list.forEach(function (t) {
+                        if ((t.group || (t.dark ? 'dark' : 'light')) !== g[0]) return;
+                        var o = document.createElement('option'); o.value = t.id; o.textContent = t.name; og.appendChild(o);
+                    });
+                    if (og.children.length) sel.appendChild(og);
+                });
+                sel.value = BearerTheme.get();
+                sel.onchange = function () { BearerTheme.set(sel.value); };
+                box.innerHTML = '<i class="bi bi-palette me-1" aria-hidden="true"></i>';
+                box.appendChild(sel);
+            }
+        })();
+    </script>
+</body>
+</html>

@@ -34,6 +34,7 @@ import calendar_ext
 import ddns_ext
 import dmarc_ext
 import drive_ext
+import invites_ext
 import mail_auth
 import relay_ext
 import security_ext
@@ -303,6 +304,7 @@ def init_db():
             upsert=True,
         )
     bearer_ext.init_indexes()
+    invites_ext.init_indexes()
     security_ext.init_indexes()
     relay_ext.init_indexes()
     drive_ext.init_indexes()
@@ -596,6 +598,8 @@ bearer_ext.configure(
 )
 security_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, send_mail=bearer_ext.send_system_mail)
 users_ext.configure(get_db=lambda: db, require_api_key=_require_api_key)
+invites_ext.configure(get_db=lambda: db, require_api_key=_require_api_key,
+                      check_rate_limit=_check_rate_limit, get_active_domains=get_active_domains)
 relay_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, hostname=IMAP_HOSTNAME or SMTP_HOSTNAME)
 drive_ext.configure(get_db=lambda: db, require_api_key=_require_api_key)
 dmarc_ext.configure(get_db=lambda: db, require_api_key=_require_api_key, server_ip=SERVER_IP)
@@ -672,6 +676,8 @@ async def admin_delete_domain(domain: str, request: Request):
 app.include_router(bearer_ext.router)
 app.include_router(security_ext.router)
 app.include_router(users_ext.router)
+app.include_router(invites_ext.router)
+app.include_router(invites_ext.public_router)
 app.include_router(relay_ext.router)
 app.include_router(drive_ext.router)
 app.include_router(dmarc_ext.router)

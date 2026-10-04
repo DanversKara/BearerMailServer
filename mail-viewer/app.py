@@ -1146,6 +1146,61 @@ def login_verify():
     return redirect(url_for("index"))
 
 
+# ---- Public sign-up with an invite code ----
+
+@app.route("/signup", methods=["GET"])
+def signup_page():
+    """Public sign-up page. Invite code needed unless the admin opened sign-up (Setup > Users > Invites)."""
+    code = (request.args.get("code") or "")[:32]
+    domains = []
+    try:
+        resp = _svc("GET", "/domains", timeout=5)
+        if resp.status_code == 200:
+            domains = [d.get("domain") for d in resp.json().get("hydra:member", []) if d.get("domain")]
+    except Exception:
+        app.logger.warning("Could not load domains for the signup page", exc_info=True)
+    mode = "invite"
+    try:
+        resp = _svc("GET", "/signup/mode", timeout=5)
+        if resp.status_code == 200:
+            mode = resp.json().get("mode", "invite")
+    except Exception:
+        app.logger.warning("Could not load signup mode; defaulting to invite-only", exc_info=True)
+    if mode not in ("invite", "open", "closed"):
+        mode = "invite"
+    return render_template("signup.html", code=code, domains=domains, mode=mode)
+
+
+@app.route("/api/signup", methods=["POST"])
+def api_signup():
+    """Public sign-up API: forwards to mail-service POST /signup (no API key; the invite code is the credential)."""
+    if _check_viewer_rate_limit("signup", LOGIN_RATE_LIMIT_WINDOW, LOGIN_RATE_LIMIT_MAX):
+        return _rate_limited_json("Too many sign-up attempts, please try again later")
+    if not request.is_json:
+        return jsonify({"success": False, "message": "JSON body required"}), 415
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "code": str(body.get("code") or "")[:64],
+        "address": str(body.get("address") or "")[:320].strip().lower(),
+        "password": str(body.get("password") or "")[:1024],
+    }
+    try:
+        resp = http_session.request(
+            "POST", f"{DUCKMAIL_BASE_URL.rstrip('/')}/signup", json=payload, timeout=30
+        )
+    except Exception:
+        app.logger.error("Signup proxy failed", exc_info=True)
+        return jsonify({"success": False, "message": "Could not reach the mail service"}), 502
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if resp.status_code >= 400:
+        detail = data.get("detail") if isinstance(data, dict) else None
+        return jsonify({"success": False, "message": detail or "Sign-up failed"}), resp.status_code
+    return jsonify({"success": True, "address": data.get("address")}), 201
+
+
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
     # Only POST signs out, so another website cannot log you out with a link or an image.
@@ -2173,8 +2228,10 @@ _ADMIN_PROXY_ALLOWED = re.compile(
     r"|blocklist|blocklist/[0-9a-fA-F.:]+(/[0-9]{1,3})?)"
     r"|relay-keys|relay-keys/revoke-all|relay-keys/[0-9a-f]{24}(/revoke)?"
     r"|users/[^/]+/app-passwords|users/[^/]+/app-passwords/[0-9a-f]{24}/revoke"
+    r"|invites|invites/[^/]+"
     r"|dmarc/summary|dmarc/reports|dmarc/import"
-    r"|ddns|ddns/check|domains/[^/]+/cloudflare)$"
+    r"|ddns|ddns/check|domains/[^/]+/cloudflare"
+    r"|signup/mode)$"
 )
 
 
