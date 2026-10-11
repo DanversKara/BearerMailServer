@@ -1,3 +1,6 @@
+# NOTICE
+I’m putting this email project aside for the foreseeable future while I work on and focus on plmailbearermail and plmailandroid_bearermail. Those projects are much more time-consuming, interesting, and fun to work on than this side project.
+
 # BearerMail
 
 Self-hosted email for your own domain.
